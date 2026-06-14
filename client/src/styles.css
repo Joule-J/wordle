@@ -550,6 +550,7 @@ input:focus {
   border: 3px solid #3a3a3c;
   display: grid;
   place-items: center;
+  position: relative;
   text-transform: uppercase;
   font-size: clamp(1.9rem, 3vw, 2.2rem);
   font-weight: 700;
@@ -557,6 +558,19 @@ input:focus {
   border-radius: 0;
   box-shadow: none;
   transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+/* Inline opponent letter shown in the top-right corner of the same tile */
+.opponent-inline {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.65);
+  font-weight: 800;
+  text-transform: uppercase;
+  pointer-events: none;
 }
 
 .cell:not(:empty) {

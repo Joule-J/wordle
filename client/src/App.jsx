@@ -653,32 +653,7 @@ export default function App() {
                   ) : null}
                 </div>
 
-                {otherPlayer ? (
-                  <div className="opponent-panel">
-                    <div className="opponent-panel-head">
-                      <span>{otherPlayer.name}</span>
-                      <span>{otherDraft ? "Typing..." : "Waiting"}</span>
-                    </div>
-                    <div className="opponent-grid">
-                      {otherBoardRows.map((row, rowIndex) => (
-                        <div key={`opponent-${rowIndex}`} className="opponent-row">
-                          {Array.from({ length: 5 }).map((_, colIndex) => {
-                            const letter = row?.guess?.[colIndex] || "";
-                            const status = row?.result?.[colIndex];
-                            return (
-                              <div
-                                key={colIndex}
-                                className={`cell opponent-cell ${status || ""} ${row?.isDraft ? "is-draft" : ""}`}
-                              >
-                                {letter}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                {/* Opponent panel removed — opponent letters are shown inline within the main grid cells */}
 
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {
@@ -689,12 +664,18 @@ export default function App() {
                         {Array.from({ length: 5 }).map((_, colIndex) => {
                           const letter = row?.guess?.[colIndex] || "";
                           const status = row?.result?.[colIndex];
+                          const opponentLetter = otherBoardRows?.[rowIndex]?.guess?.[colIndex] || "";
                           return (
                             <div
                               key={colIndex}
                               className={`${cellClass(status)} ${isFlashRow ? "flash-error" : ""}`}
                             >
-                              {letter}
+                              <span className="main-letter">{letter}</span>
+                              {opponentLetter ? (
+                                <span className="opponent-inline" aria-hidden="true">
+                                  {opponentLetter}
+                                </span>
+                              ) : null}
                             </div>
                           );
                         })}
