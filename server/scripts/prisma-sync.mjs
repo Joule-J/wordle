@@ -6,10 +6,9 @@ if (!process.env.DATABASE_URL) {
   process.exit(0);
 }
 
-const result = spawnSync("prisma", ["db", "push", "--skip-generate"], {
+const result = spawnSync("prisma", ["db", "push", "--accept-data-loss"], {
   stdio: "inherit",
   env: process.env
 });
 
 process.exit(result.status ?? 1);
-
