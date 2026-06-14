@@ -14,8 +14,12 @@ app.use(express.json());
 const rooms = new Map();
 
 function getRoom(roomId) {
+  return rooms.get(roomId);
+}
+
+async function getOrCreateRoom(roomId) {
   if (!rooms.has(roomId)) {
-    rooms.set(roomId, createRoom(roomId));
+    rooms.set(roomId, await createRoom(roomId));
   }
   return rooms.get(roomId);
 }
@@ -23,7 +27,11 @@ function getRoom(roomId) {
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/api/room/:roomId", (req, res) => {
-  const room = getRoom(req.params.roomId);
+  const room = rooms.get(req.params.roomId);
+  if (!room) {
+    res.status(404).json({ error: "room_not_found" });
+    return;
+  }
   res.json(roomSnapshot(room));
 });
 
@@ -44,7 +52,7 @@ function broadcast(roomId) {
   }
 }
 
-wss.on("connection", (ws, req) => {
+wss.on("connection", async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const roomId = url.searchParams.get("roomId") || "lobby";
   const playerId = url.searchParams.get("playerId") || `p-${Math.random().toString(16).slice(2)}`;
@@ -52,20 +60,20 @@ wss.on("connection", (ws, req) => {
   ws.roomId = roomId;
   ws.playerId = playerId;
 
-  const room = getRoom(roomId);
+  const room = await getOrCreateRoom(roomId);
   joinRoom(room, playerId, name);
   broadcast(roomId);
 
   ws.send(JSON.stringify({ type: "state", state: roomSnapshot(room), you: { playerId, name } }));
 
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     let data;
     try {
       data = JSON.parse(raw.toString());
     } catch {
       return;
     }
-    const currentRoom = getRoom(roomId);
+      const currentRoom = await getOrCreateRoom(roomId);
 
     if (data.type === "join") {
       joinRoom(currentRoom, playerId, data.name || name);
@@ -91,7 +99,7 @@ wss.on("connection", (ws, req) => {
     }
 
     if (data.type === "next_round") {
-      nextRound(currentRoom);
+      await nextRound(currentRoom);
       broadcast(roomId);
     }
   });

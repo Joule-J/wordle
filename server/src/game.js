@@ -1,17 +1,17 @@
 import { isValidGuess, pickWord } from "./words.js";
 
-export function createRoom(roomId) {
+export async function createRoom(roomId) {
   return {
     roomId,
     players: [],
     messages: [],
-    round: createRound()
+    round: await createRound()
   };
 }
 
-function createRound() {
+async function createRound() {
   return {
-    target: pickWord(),
+    target: await pickWord(),
     startedAt: Date.now(),
     finishedAt: null,
     winner: null,
@@ -85,7 +85,9 @@ export function guess(room, playerId, value) {
 }
 
 export function nextRound(room) {
-  room.round = createRound();
+  return createRound().then((round) => {
+    room.round = round;
+  });
 }
 
 export function addMessage(room, playerId, name, text) {
