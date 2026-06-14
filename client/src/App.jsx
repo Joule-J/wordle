@@ -72,6 +72,50 @@ function roomErrorMessage(code) {
   return "Could not connect to room.";
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchJsonWithRetry(url, options = {}, retries = 2) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      const rawText = await response.text();
+      let data = null;
+
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        data = null;
+      }
+
+      if (response.ok) {
+        return data;
+      }
+
+      const errorCode = data?.error || `http_${response.status}`;
+      const retriable = response.status >= 500 || response.status === 429;
+
+      if (!retriable || attempt === retries) {
+        throw new Error(errorCode);
+      }
+
+      lastError = new Error(errorCode);
+    } catch (error) {
+      lastError = error;
+      if (attempt === retries) {
+        break;
+      }
+    }
+
+    await delay(900 * (attempt + 1));
+  }
+
+  throw lastError || new Error("request_failed");
+}
+
 function replyPreviewText(text, limit = 72) {
   const value = String(text ?? "").trim();
   if (value.length <= limit) return value;
@@ -408,7 +452,7 @@ export default function App() {
     setNameDraft(trimmedName);
 
     try {
-      const response = await fetch(`${API_BASE}/api/rooms`, {
+      const data = await fetchJsonWithRetry(`${API_BASE}/api/rooms`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -418,20 +462,20 @@ export default function App() {
           name: trimmedName
         })
       });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "create_failed");
-      }
 
       setRoomCode(data.roomId);
       setRoomCodeDraft(data.roomId);
       setState(data);
       setJoined(true);
       connectToRoom(data.roomId, trimmedName);
-    } catch {
+    } catch (error) {
       setStatus("Disconnected");
       setJoined(false);
-      setRoomError("Could not create room.");
+      setRoomError(
+        error?.message?.startsWith("http_")
+          ? "Server is waking up. Please try again."
+          : roomErrorMessage(error?.message || "create_failed")
+      );
     }
   }
 
@@ -455,11 +499,7 @@ export default function App() {
     setNameDraft(trimmedName);
 
     try {
-      const response = await fetch(`${API_BASE}/api/rooms/${encodeURIComponent(normalizedRoomCode)}`);
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "room_not_found");
-      }
+      const data = await fetchJsonWithRetry(`${API_BASE}/api/rooms/${encodeURIComponent(normalizedRoomCode)}`);
 
       setRoomCode(normalizedRoomCode);
       setRoomCodeDraft(normalizedRoomCode);
