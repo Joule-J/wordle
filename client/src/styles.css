@@ -115,6 +115,7 @@ input:focus {
   grid-template-columns: minmax(0, 1fr) 420px;
   min-height: 0;
   overflow: hidden;
+  align-items: stretch;
 }
 
 .workspace.is-landing {
@@ -166,6 +167,7 @@ input:focus {
 .chat-pane {
   padding: 26px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .board-pane {
@@ -308,7 +310,7 @@ input:focus {
 .chat-shell {
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
   min-height: 0;
 }
@@ -335,6 +337,7 @@ input:focus {
   flex-direction: column;
   gap: 10px;
   padding: 6px 2px 12px;
+  overscroll-behavior: contain;
 }
 
 .message {
@@ -372,6 +375,7 @@ input:focus {
   display: flex;
   gap: 10px;
   padding-top: 6px;
+  align-self: end;
 }
 
 .chat-form input {
@@ -387,7 +391,7 @@ input:focus {
   .chat-pane {
     border-left: 0;
     border-top: 1px solid var(--line);
-    min-height: 420px;
+    min-height: 360px;
     overflow: visible;
   }
 
@@ -442,5 +446,12 @@ input:focus {
 
   .inline-controls input {
     width: 100%;
+  }
+
+  .chat-form {
+    position: sticky;
+    bottom: 0;
+    background: #111111;
+    padding-bottom: 2px;
   }
 }
