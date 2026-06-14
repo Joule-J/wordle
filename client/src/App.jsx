@@ -32,6 +32,7 @@ export default function App() {
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
+  const [joined, setJoined] = useState(false);
   const socketRef = useRef(null);
 
   const roomState = state?.round;
@@ -46,10 +47,12 @@ export default function App() {
   }, [meAttempts]);
 
   useEffect(() => {
-    connect();
+    if (joined) {
+      connect();
+    }
     return () => socketRef.current?.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
+  }, [roomId, joined]);
 
   function connect() {
     socketRef.current?.close();
@@ -108,6 +111,12 @@ export default function App() {
     setRoomDraft(nextRoom);
   }
 
+  function enterRoom() {
+    applyRoom();
+    applyName();
+    setJoined(true);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -125,7 +134,28 @@ export default function App() {
         </div>
       </header>
 
-      <main className="workspace">
+      <main className={`workspace ${joined ? "is-live" : "is-landing"}`}>
+        {!joined ? (
+          <section className="landing-pane">
+            <div className="landing-card">
+              <div className="landing-copy">
+                <div className="brand-kicker">ONLINE WORDLE</div>
+                <h2>Create or join a room</h2>
+                <p>Open the site, pick a room, set your name, then start the board.</p>
+              </div>
+              <div className="landing-form">
+                <label>Room</label>
+                <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} />
+                <label>Your name</label>
+                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
+                <button onClick={enterRoom}>Enter room</button>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {joined ? (
+          <>
         <section className="board-pane">
           <div className="board-shell">
             <div className="grid">
@@ -190,17 +220,12 @@ export default function App() {
                     : "Round ended."
                   : "Green = correct, yellow = present, gray = absent."}
               </div>
-              <div className="inline-controls">
-                <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} aria-label="Room code" />
-                <button onClick={applyRoom}>Join</button>
-                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} aria-label="Your name" />
-                <button onClick={applyName}>Set name</button>
-                {roomState?.finishedAt ? <button onClick={() => send("next_round", {})}>New round</button> : null}
-              </div>
+              {roomState?.finishedAt ? (
+                <button onClick={() => send("next_round", {})}>New round</button>
+              ) : null}
             </div>
           </div>
         </section>
-
         <aside className="chat-pane">
           <div className="chat-shell">
             <div className="chat-header">
@@ -230,6 +255,8 @@ export default function App() {
             </form>
           </div>
         </aside>
+          </>
+        ) : null}
       </main>
     </div>
   );
