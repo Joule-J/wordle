@@ -54,6 +54,7 @@ export default function App() {
   const [boardNotice, setBoardNotice] = useState("");
   const [boardNoticeKind, setBoardNoticeKind] = useState("info");
   const [guessFlashToken, setGuessFlashToken] = useState(0);
+  const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
@@ -137,6 +138,12 @@ export default function App() {
     setInput("");
     setChatError("");
   }, [matchState?.startedAt, roundState?.roundNumber]);
+
+  useEffect(() => {
+    if (!joined) {
+      setComposerEmojiOpen(false);
+    }
+  }, [joined]);
 
   useEffect(() => {
     if (!boardNotice) return undefined;
@@ -376,30 +383,21 @@ export default function App() {
     setChat((value) => `${value}${emoji}`);
   }
 
+  function toggleComposerEmojiPanel() {
+    setComposerEmojiOpen((current) => !current);
+  }
+
+  function pickComposerEmoji(emoji) {
+    appendEmoji(emoji);
+    setComposerEmojiOpen(false);
+  }
+
   function playAgain() {
     send("play_again", {});
   }
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-left">
-          <button className="icon-button" aria-label="menu" type="button">
-            ☰
-          </button>
-          <div className="brand">
-            <div className="brand-kicker">Online Wordle</div>
-            <div className="brand-title">Room duel</div>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <div className="pill">{status}</div>
-          <div className="pill">Room {roomLabel}</div>
-          <div className="pill">{matchState ? `Round ${roundLabel}` : "Waiting"}</div>
-          <div className="pill">{otherPlayer?.name || "Waiting"}</div>
-        </div>
-      </header>
-
       <main className={`workspace ${joined ? "is-live" : "is-landing"}`}>
         {!joined ? (
           <section className="landing-pane">
@@ -446,28 +444,23 @@ export default function App() {
           <>
             <section className="board-pane">
               <div className="board-shell">
-                <div className="match-banner">
-                  <div className="match-banner-top">
-                    <div className="match-banner-title">
-                      Room {roomLabel}
-                      <span>Round {roundLabel}</span>
-                    </div>
-                    {matchFinished ? <div className="match-badge">Match finished</div> : null}
+                <div className="room-stats">
+                  <div className="stat-pill">
+                    <span>Room</span>
+                    <strong>{roomLabel}</strong>
                   </div>
-                  <div className="match-banner-copy">
-                    {!state
-                      ? "Bağlanıyor..."
-                      : matchFinished
-                        ? "5 round bitti. Same room code ile Play Again."
-                        : roundState?.finishedAt
-                          ? "Round tamamlandı, sonraki tur hazırlanıyor."
-                          : "Kelimeyi bul."}
+                  <div className="stat-pill">
+                    <span>Round</span>
+                    <strong>{roundLabel}</strong>
                   </div>
-                  {matchFinished ? (
-                    <button type="button" className="play-again-button" onClick={playAgain}>
-                      Play Again
-                    </button>
-                  ) : null}
+                  <div className="stat-pill">
+                    <span>Status</span>
+                    <strong>{status}</strong>
+                  </div>
+                  <div className="stat-pill">
+                    <span>Player</span>
+                    <strong>{otherPlayer?.name || "Waiting"}</strong>
+                  </div>
                 </div>
 
                 {boardNotice || (roundTarget && roundState?.finishedAt) ? (
@@ -485,6 +478,23 @@ export default function App() {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="match-line">
+                  <div className="match-copy">
+                    {!state
+                      ? "Bağlanıyor..."
+                      : matchFinished
+                        ? "5 round bitti. Same room code ile Play Again."
+                        : roundState?.finishedAt
+                          ? "Round tamamlandı, sonraki tur hazırlanıyor."
+                          : "Kelimeyi bul."}
+                  </div>
+                  {matchFinished ? (
+                    <button type="button" className="play-again-button" onClick={playAgain}>
+                      Play Again
+                    </button>
+                  ) : null}
+                </div>
 
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {
@@ -552,13 +562,7 @@ export default function App() {
             </section>
 
             <aside className="chat-pane">
-              <div className="chat-shell">
-                <div className="chat-header">
-                  <div>
-                    <div className="chat-title">Chat</div>
-                    <div className="chat-subtitle">Room only</div>
-                  </div>
-                </div>
+                <div className="chat-shell">
                 <div className="messages">
                   {(state?.messages || []).map((message) => (
                     <div
@@ -623,9 +627,29 @@ export default function App() {
                   <div ref={messagesEndRef} />
                 </div>
                 <form className="chat-form" onSubmit={onSubmitChat}>
-                  <button type="button" className="emoji-shortcut" onClick={() => appendEmoji("🙂")}>
-                    ☺
-                  </button>
+                  <div className="emoji-wrap">
+                    <button
+                      type="button"
+                      className={`emoji-shortcut ${composerEmojiOpen ? "is-open" : ""}`}
+                      onClick={toggleComposerEmojiPanel}
+                    >
+                      ☺
+                    </button>
+                    {composerEmojiOpen ? (
+                      <div className="composer-emoji-panel">
+                        {["🙂", "😂", "🔥", "❤️", "👍", "🎉", "👀", "😮"].map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="composer-emoji-chip"
+                            onClick={() => pickComposerEmoji(emoji)}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   {replyTo ? (
                     <div className="reply-composer">
                       Replying to {replyTo.name}: {replyTo.text}
