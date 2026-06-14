@@ -1,0 +1,14 @@
+{
+  "name": "online-wordle-chat",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server"
+  }
+}
