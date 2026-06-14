@@ -25,27 +25,34 @@ export const WORDS = [
 
 const DATAMUSE_VALIDATE_URL = (word) => `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&max=1`;
 const validWordCache = new Map();
+let wordPickQueue = Promise.resolve();
 
 export async function pickWord() {
-  const pool = await getUnusedWordPool();
-  const word = pool[Math.floor(Math.random() * pool.length)];
-  if (!word) {
-    throw new Error("No words available");
-  }
-  try {
-    const prisma = await getPrismaClient();
-    if (prisma) {
-      await prisma.usedWord.upsert({
-        where: { word },
-        create: { word },
-        update: { pickedAt: new Date() }
-      });
+  const run = async () => {
+    const pool = await getUnusedWordPool();
+    const word = pool[Math.floor(Math.random() * pool.length)];
+    if (!word) {
+      throw new Error("No words available");
     }
-  } catch {
-    // Keep the game playable if the database write fails.
-  }
+    try {
+      const prisma = await getPrismaClient();
+      if (prisma) {
+        await prisma.usedWord.upsert({
+          where: { word },
+          create: { word },
+          update: { pickedAt: new Date() }
+        });
+      }
+    } catch {
+      // Keep the game playable if the database write fails.
+    }
 
-  return word;
+    return word;
+  };
+
+  const next = wordPickQueue.then(run, run);
+  wordPickQueue = next.catch(() => {});
+  return next;
 }
 
 async function getUnusedWordPool() {

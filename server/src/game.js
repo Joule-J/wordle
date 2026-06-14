@@ -1,17 +1,43 @@
 import { isRealWord, isValidGuess, pickWord } from "./words.js";
 
-export async function createRoom(roomId) {
-  return {
+export const MATCH_ROUNDS = 5;
+const AUTO_ADVANCE_DELAY_MS = 1200;
+
+export async function createRoom(roomId, creator = null) {
+  const room = {
     roomId,
+    createdAt: Date.now(),
     players: [],
     messages: [],
     lastOutcome: null,
-    round: await createRound()
+    match: createMatchState(),
+    round: await createRound(1)
+  };
+
+  if (creator?.playerId && creator?.name) {
+    const joinResult = joinRoom(room, creator.playerId, creator.name);
+    if (!joinResult.ok) {
+      throw new Error(joinResult.error);
+    }
+  }
+
+  return room;
+}
+
+function createMatchState() {
+  return {
+    startedAt: Date.now(),
+    finishedAt: null,
+    roundsCompleted: 0,
+    currentRoundNumber: 1,
+    totalRounds: MATCH_ROUNDS
   };
 }
 
-async function createRound() {
+async function createRound(roundNumber) {
   return {
+    roundNumber,
+    totalRounds: MATCH_ROUNDS,
     target: await pickWord(),
     startedAt: Date.now(),
     finishedAt: null,
@@ -21,13 +47,66 @@ async function createRound() {
   };
 }
 
+export async function resetMatch(room) {
+  room.match = createMatchState();
+  room.lastOutcome = null;
+  room.round = await createRound(1);
+}
+
+export async function startNextRound(room) {
+  if (room.match.finishedAt) {
+    return { ok: false, error: "match_finished" };
+  }
+  if (!room.round.finishedAt) {
+    return { ok: false, error: "round_active" };
+  }
+  const nextRoundNumber = room.match.roundsCompleted + 1;
+  room.match.currentRoundNumber = nextRoundNumber;
+  room.round = await createRound(nextRoundNumber);
+  return { ok: true };
+}
+
+function finishRound(room, playerId, didWin) {
+  room.round.finishedAt = Date.now();
+  room.round.revealed = true;
+  room.round.winner = didWin ? playerId : null;
+  room.match.roundsCompleted += 1;
+
+  room.lastOutcome = {
+    type: didWin ? "won" : "lost",
+    target: room.round.target,
+    winner: didWin ? playerId : null,
+    roundNumber: room.round.roundNumber,
+    at: Date.now()
+  };
+
+  if (room.match.roundsCompleted >= MATCH_ROUNDS) {
+    room.match.currentRoundNumber = MATCH_ROUNDS;
+    room.match.finishedAt = Date.now();
+    return { roundEnded: true, matchEnded: true };
+  }
+
+  room.match.currentRoundNumber = room.match.roundsCompleted + 1;
+  return { roundEnded: true, matchEnded: false };
+}
+
 export function roomSnapshot(room) {
   return {
     roomId: room.roomId,
+    createdAt: room.createdAt,
     players: room.players,
     messages: room.messages.slice(-50),
     lastOutcome: room.lastOutcome,
+    match: {
+      startedAt: room.match.startedAt,
+      finishedAt: room.match.finishedAt,
+      roundsCompleted: room.match.roundsCompleted,
+      currentRoundNumber: room.match.currentRoundNumber,
+      totalRounds: room.match.totalRounds
+    },
     round: {
+      roundNumber: room.round.roundNumber,
+      totalRounds: room.round.totalRounds,
       startedAt: room.round.startedAt,
       finishedAt: room.round.finishedAt,
       winner: room.round.winner,
@@ -42,11 +121,16 @@ export function joinRoom(room, playerId, name) {
   const existing = room.players.find((p) => p.id === playerId);
   if (existing) {
     existing.name = name;
-    return existing;
+    return { ok: true, player: existing, created: false };
   }
+
+  if (room.players.length >= 2) {
+    return { ok: false, error: "room_full" };
+  }
+
   const player = { id: playerId, name, joinedAt: Date.now() };
-  room.players = room.players.filter((p) => p.id !== playerId).concat(player).slice(0, 2);
-  return player;
+  room.players = room.players.concat(player);
+  return { ok: true, player, created: true };
 }
 
 export async function guess(room, playerId, value) {
@@ -74,29 +158,46 @@ export async function guess(room, playerId, value) {
   room.round.attemptsByPlayer[playerId] = [...playerGuesses, entry];
 
   if (guessWord === room.round.target) {
-    room.round.finishedAt = Date.now();
-    room.round.winner = playerId;
-    room.round.revealed = true;
-    room.lastOutcome = { type: "won", target: room.round.target, winner: playerId, at: Date.now() };
-    return { ok: true, entry, roundEnded: true, won: true };
+    const progress = finishRound(room, playerId, true);
+    return { ok: true, entry, ...progress, won: true };
   }
 
   const allAttempts = Object.values(room.round.attemptsByPlayer).flat();
   if (allAttempts.length >= 12) {
-    room.round.finishedAt = Date.now();
-    room.round.revealed = true;
-    room.lastOutcome = { type: "lost", target: room.round.target, winner: null, at: Date.now() };
-    return { ok: true, entry, roundEnded: true, won: false };
+    const progress = finishRound(room, playerId, false);
+    return { ok: true, entry, ...progress, won: false };
   }
 
   return { ok: true, entry, roundEnded: false, won: false };
 }
 
-export function nextRound(room) {
-  return createRound().then((round) => {
-    room.round = round;
-    room.lastOutcome = null;
-  });
+export async function nextRound(room) {
+  if (room.match.finishedAt) {
+    return { ok: false, error: "match_finished" };
+  }
+  if (!room.round.finishedAt) {
+    return { ok: false, error: "round_active" };
+  }
+
+  room.lastOutcome = null;
+  const nextRoundNumber = room.match.currentRoundNumber;
+  room.round = await createRound(nextRoundNumber);
+  return { ok: true };
+}
+
+export async function playAgain(room) {
+  await resetMatch(room);
+  return { ok: true };
+}
+
+export function scheduleNextRound(room, broadcast) {
+  setTimeout(async () => {
+    if (!room || room.match.finishedAt || !room.round.finishedAt) {
+      return;
+    }
+    await nextRound(room);
+    broadcast();
+  }, AUTO_ADVANCE_DELAY_MS);
 }
 
 export function addMessage(room, playerId, name, text) {

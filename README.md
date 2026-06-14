@@ -40,7 +40,8 @@ Set `VITE_API_BASE` on the frontend to the Render backend URL.
 ## Current MVP behavior
 
 - 2-player room-based play
+- Create room or join by room code
 - 5-letter guesses
 - Wordle-style feedback colors
 - Room-only chat
-- New round button after a round ends
+- 5-round match flow with Play Again to start a new match

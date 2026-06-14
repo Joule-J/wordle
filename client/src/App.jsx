@@ -5,11 +5,14 @@ const API_BASE =
   (import.meta.env.DEV ? "http://localhost:3001" : "https://wordle-9iz0.onrender.com");
 
 function getId() {
-  return localStorage.getItem("wordle_player_id") || (() => {
-    const id = `u-${Math.random().toString(16).slice(2)}`;
-    localStorage.setItem("wordle_player_id", id);
-    return id;
-  })();
+  return (
+    localStorage.getItem("wordle_player_id") ||
+    (() => {
+      const id = `u-${Math.random().toString(16).slice(2)}`;
+      localStorage.setItem("wordle_player_id", id);
+      return id;
+    })()
+  );
 }
 
 function getName() {
@@ -20,19 +23,34 @@ function setStoredName(name) {
   localStorage.setItem("wordle_player_name", name);
 }
 
+function normalizeRoomCode(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
 function cellClass(status) {
   return `cell ${status || ""}`;
 }
 
+function roomErrorMessage(code) {
+  if (code === "room_not_found") return "Room code not found.";
+  if (code === "room_full") return "Room is full.";
+  if (code === "name_required") return "Name is required.";
+  return "Could not connect to room.";
+}
+
 export default function App() {
-  const [roomId, setRoomId] = useState("demo");
-  const [roomDraft, setRoomDraft] = useState("demo");
+  const [roomCode, setRoomCode] = useState("");
+  const [roomCodeDraft, setRoomCodeDraft] = useState("");
   const [name, setName] = useState(getName());
   const [nameDraft, setNameDraft] = useState(getName());
   const [input, setInput] = useState("");
   const [chat, setChat] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const [chatError, setChatError] = useState("");
+  const [roomError, setRoomError] = useState("");
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
@@ -41,11 +59,15 @@ export default function App() {
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const roomState = state?.round;
-  const meAttempts = roomState?.attemptsByPlayer?.[you.playerId] || [];
+  const roundState = state?.round;
+  const matchState = state?.match;
+  const meAttempts = roundState?.attemptsByPlayer?.[you.playerId] || [];
   const otherPlayer = state?.players?.find((p) => p.id !== you.playerId);
-  const canPlay = !!socketRef.current && roomState && !roomState.finishedAt;
-  const roundTarget = roomState?.target;
+  const matchFinished = !!matchState?.finishedAt;
+  const canPlay = !!socketRef.current && !!roundState && !roundState.finishedAt && !matchFinished;
+  const roundTarget = roundState?.target;
+  const roomLabel = state?.roomId || roomCode || "—";
+  const roundLabel = matchState ? `${matchState.currentRoundNumber}/${matchState.totalRounds}` : "—";
 
   const boardRows = useMemo(() => {
     const rows = [...meAttempts];
@@ -69,12 +91,8 @@ export default function App() {
   }, [meAttempts]);
 
   useEffect(() => {
-    if (joined) {
-      connect();
-    }
     return () => socketRef.current?.close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, joined]);
+  }, []);
 
   useEffect(() => {
     if (!joined) return;
@@ -86,10 +104,9 @@ export default function App() {
         tagName === "TEXTAREA" ||
         target?.isContentEditable;
 
-      if (isTypingField) {
-        return;
-      }
+      if (isTypingField) return;
       if (!canPlay) return;
+
       if (event.key === "Enter") {
         if (input.length === 5) {
           send("guess", { value: input.trim().toLowerCase() });
@@ -113,25 +130,64 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [state?.messages?.length]);
 
-  function connect() {
+  useEffect(() => {
+    setInput("");
+    setChatError("");
+  }, [matchState?.startedAt, roundState?.roundNumber]);
+
+  function connectToRoom(nextRoomCode, nextName) {
     socketRef.current?.close();
-    const wsUrl = API_BASE.replace(/^http/, "ws");
-    const socket = new WebSocket(`${wsUrl}/ws?roomId=${encodeURIComponent(roomId)}&playerId=${encodeURIComponent(you.playerId)}&name=${encodeURIComponent(name)}`);
-    socketRef.current = socket;
+
+    const normalizedRoomCode = normalizeRoomCode(nextRoomCode);
+    const trimmedName = nextName.trim().slice(0, 24) || "Player";
+    setRoomCode(normalizedRoomCode);
+    setRoomCodeDraft(normalizedRoomCode);
+    setName(trimmedName);
+    setStoredName(trimmedName);
     setStatus("Connecting...");
+    setRoomError("");
+
+    const wsUrl = API_BASE.replace(/^http/, "ws");
+    const socket = new WebSocket(
+      `${wsUrl}/ws?roomId=${encodeURIComponent(normalizedRoomCode)}&playerId=${encodeURIComponent(
+        you.playerId
+      )}&name=${encodeURIComponent(trimmedName)}`
+    );
+    socketRef.current = socket;
+
+    let settled = false;
 
     socket.onopen = () => {
       setStatus("Connected");
-      socket.send(JSON.stringify({ type: "join", name }));
+      socket.send(JSON.stringify({ type: "join_room", name: trimmedName }));
     };
-    socket.onclose = () => setStatus("Disconnected");
-    socket.onerror = () => setStatus("Connection error");
+
+    socket.onclose = () => {
+      setStatus("Disconnected");
+      if (!settled) {
+        setJoined(false);
+      }
+    };
+
+    socket.onerror = () => {
+      setStatus("Connection error");
+      if (!settled) {
+        setJoined(false);
+        setRoomError("Connection error");
+      }
+    };
+
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+
       if (data.type === "state") {
+        settled = true;
         setState(data.state);
         if (data.you) setYou(data.you);
+        setJoined(true);
+        return;
       }
+
       if (data.type === "guess_result") {
         if (!data.ok) setStatus(data.error);
         if (!data.ok && data.error === "not_a_real_word") {
@@ -143,6 +199,33 @@ export default function App() {
         if (data.ok) {
           setChatError("");
         }
+        return;
+      }
+
+      if (data.type === "join_result" && !data.ok) {
+        setRoomError(roomErrorMessage(data.error));
+        setStatus(data.error);
+        if (!settled) setJoined(false);
+        return;
+      }
+
+      if (data.type === "play_again_result" && !data.ok) {
+        setRoomError(roomErrorMessage(data.error));
+        setStatus(data.error);
+        return;
+      }
+
+      if (data.type === "next_round_result" && !data.ok) {
+        setRoomError(roomErrorMessage(data.error));
+        setStatus(data.error);
+        return;
+      }
+
+      if (data.type === "error") {
+        const message = roomErrorMessage(data.error);
+        setRoomError(message);
+        setStatus(data.error || "Connection error");
+        if (!settled) setJoined(false);
       }
     };
   }
@@ -170,26 +253,88 @@ export default function App() {
     setChatError("");
   }
 
-  function enterRoom() {
-    const nextRoom = roomDraft.trim() || "demo";
-    const trimmedName = nameDraft.trim().slice(0, 24) || "Player";
-    setRoomId(nextRoom);
-    setRoomDraft(nextRoom);
+  async function handleCreateRoom() {
+    const trimmedName = nameDraft.trim().slice(0, 24);
+    if (!trimmedName) {
+      setRoomError("Name is required.");
+      return;
+    }
+
+    setRoomError("");
+    setStatus("Creating room...");
+    setStoredName(trimmedName);
     setName(trimmedName);
     setNameDraft(trimmedName);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/rooms`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          playerId: you.playerId,
+          name: trimmedName
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "create_failed");
+      }
+
+      setRoomCode(data.roomId);
+      setRoomCodeDraft(data.roomId);
+      setState(data);
+      setJoined(true);
+      connectToRoom(data.roomId, trimmedName);
+    } catch {
+      setStatus("Disconnected");
+      setJoined(false);
+      setRoomError("Could not create room.");
+    }
+  }
+
+  async function handleJoinRoom(e) {
+    e.preventDefault();
+    const trimmedName = nameDraft.trim().slice(0, 24);
+    const normalizedRoomCode = normalizeRoomCode(roomCodeDraft);
+    if (!trimmedName) {
+      setRoomError("Name is required.");
+      return;
+    }
+    if (!normalizedRoomCode) {
+      setRoomError("Room code is required.");
+      return;
+    }
+
+    setRoomError("");
+    setStatus("Checking room...");
     setStoredName(trimmedName);
-    setJoined(true);
+    setName(trimmedName);
+    setNameDraft(trimmedName);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/rooms/${encodeURIComponent(normalizedRoomCode)}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "room_not_found");
+      }
+
+      setRoomCode(normalizedRoomCode);
+      setRoomCodeDraft(normalizedRoomCode);
+      setState(data);
+      setJoined(true);
+      connectToRoom(normalizedRoomCode, trimmedName);
+    } catch (error) {
+      setStatus("Disconnected");
+      setJoined(false);
+      setRoomError(roomErrorMessage(error?.message || "room_not_found"));
+    }
   }
 
   function handleGuessInput(char) {
     setInput((value) => (value.length < 5 ? `${value}${char}` : value));
     setChatError("");
-  }
-
-  function submitKeyboardGuess() {
-    if (input.length === 5) {
-      send("guess", { value: input.trim().toLowerCase() });
-    }
   }
 
   function reactToMessage(messageId, emoji) {
@@ -204,11 +349,17 @@ export default function App() {
     setChat((value) => `${value}${emoji}`);
   }
 
+  function playAgain() {
+    send("play_again", {});
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
-          <button className="icon-button" aria-label="menu">☰</button>
+          <button className="icon-button" aria-label="menu" type="button">
+            ☰
+          </button>
           <div className="brand">
             <div className="brand-kicker">Online Wordle</div>
             <div className="brand-title">Room duel</div>
@@ -216,7 +367,8 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <div className="pill">{status}</div>
-          <div className="pill">Room {roomId}</div>
+          <div className="pill">Room {roomLabel}</div>
+          <div className="pill">{matchState ? `Round ${roundLabel}` : "Waiting"}</div>
           <div className="pill">{otherPlayer?.name || "Waiting"}</div>
         </div>
       </header>
@@ -227,168 +379,228 @@ export default function App() {
             <div className="landing-card">
               <div className="landing-copy">
                 <div className="brand-kicker">ONLINE WORDLE</div>
-                <h2>Create or join a room</h2>
-                <p>Open the site, pick a room, set your name, then start the board.</p>
+                <h2>Oda oluştur veya katıl</h2>
+                <p>İsim zorunlu. Oda oluşturan kod alır, katılan mevcut kodla girer.</p>
               </div>
-              <div className="landing-form">
-                <label>Room</label>
-                <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} />
-                <label>Your name</label>
-                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
-                <button type="button" onClick={enterRoom}>Enter room</button>
-              </div>
+              <form className="landing-form" onSubmit={handleJoinRoom}>
+                <label>İsim</label>
+                <input
+                  value={nameDraft}
+                  onChange={(e) => {
+                    setNameDraft(e.target.value);
+                    setRoomError("");
+                  }}
+                  placeholder="Your name"
+                  maxLength={24}
+                />
+                <label>Oda kodu</label>
+                <input
+                  value={roomCodeDraft}
+                  onChange={(e) => {
+                    setRoomCodeDraft(normalizeRoomCode(e.target.value));
+                    setRoomError("");
+                  }}
+                  placeholder="Join code"
+                  maxLength={8}
+                />
+                <div className="landing-actions">
+                  <button type="button" onClick={handleCreateRoom}>
+                    Oda oluştur
+                  </button>
+                  <button type="submit">Odaya katıl</button>
+                </div>
+                {roomError ? <div className="error-banner">{roomError}</div> : null}
+              </form>
             </div>
           </section>
         ) : null}
 
         {joined ? (
           <>
-        <section className="board-pane">
-          <div className="board-shell">
-            {roomState?.finishedAt ? (
-              <div className="outcome-banner">
-                <div className="outcome-title">
-                  {roomState.winner === you.playerId ? "You won" : "Round ended"}
-                </div>
-                <div className="outcome-text">
-                  Answer: <strong>{roundTarget?.toUpperCase()}</strong>
-                </div>
-              </div>
-            ) : null}
-            <div className="grid">
-              {boardRows.map((row, rowIndex) => {
-                const isActiveRow = !row && rowIndex === meAttempts.length && !roomState?.finishedAt;
-                return (
-                  <div key={rowIndex} className="row">
-                    {Array.from({ length: 5 }).map((_, colIndex) => {
-                      const letter = row?.guess?.[colIndex] || (isActiveRow ? input[colIndex] || "" : "");
-                      const status = row?.result?.[colIndex];
-                      return (
-                        <div key={colIndex} className={cellClass(status)}>
-                          {letter}
-                        </div>
-                      );
-                    })}
+            <section className="board-pane">
+              <div className="board-shell">
+                <div className="match-banner">
+                  <div className="match-banner-top">
+                    <div className="match-banner-title">
+                      Room {roomLabel}
+                      <span>Round {roundLabel}</span>
+                    </div>
+                    {matchFinished ? <div className="match-badge">Match finished</div> : null}
                   </div>
-                );
-              })}
-            </div>
-
-            <div className="keyboard">
-              {[
-                "QWERTYUIOP",
-                "ASDFGHJKL",
-                "ZXCVBNM"
-              ].map((row, rowIndex) => (
-                <div key={rowIndex} className="keyboard-row">
-                  {row.split("").map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`key ${keyboardState[key] || ""}`}
-                      onClick={() => handleGuessInput(key.toLowerCase())}
-                      disabled={!canPlay}
-                    >
-                      {key}
-                    </button>
-                  ))}
-                  {rowIndex === 2 ? (
-                    <button type="button" className="key wide" onClick={() => setInput((value) => value.slice(0, -1))}>
-                      ⌫
+                  <div className="match-banner-copy">
+                    {!state
+                      ? "Bağlanıyor..."
+                      : matchFinished
+                        ? "5 round bitti. Same room code ile Play Again."
+                        : roundState?.finishedAt
+                          ? "Round tamamlandı, sonraki tur hazırlanıyor."
+                          : "Kelimeyi bul."}
+                  </div>
+                  {roundTarget && roundState?.finishedAt ? (
+                    <div className="outcome-text">
+                      Answer: <strong>{roundTarget.toUpperCase()}</strong>
+                    </div>
+                  ) : null}
+                  {matchFinished ? (
+                    <button type="button" className="play-again-button" onClick={playAgain}>
+                      Play Again
                     </button>
                   ) : null}
                 </div>
-              ))}
-            </div>
 
-            <form className="guess-form" onSubmit={onSubmitGuess}>
-              <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
-            </form>
-
-            {chatError ? <div className="error-banner">{chatError}</div> : null}
-
-            <div className="footer-row">
-              {roomState?.finishedAt ? (
-                <button type="button" onClick={() => send("next_round", {})}>New round</button>
-              ) : null}
-            </div>
-          </div>
-        </section>
-        <aside className="chat-pane">
-          <div className="chat-shell">
-            <div className="chat-header">
-              <div>
-                <div className="chat-title">Chat</div>
-                <div className="chat-subtitle">Room only</div>
-              </div>
-            </div>
-            <div className="messages">
-              {(state?.messages || []).map((message) => (
-                <div
-                  key={message.id}
-                  className={`message ${message.playerId === you.playerId ? "mine" : ""}`}
-                  onMouseLeave={() => setActiveEmojiMessageId(null)}
-                >
-                  <div className="bubble">
-                    {message.replyTo ? (
-                      <div className="reply-pill">
-                        Replying to {message.replyTo.name}: {message.replyTo.text}
+                <div className="grid">
+                  {boardRows.map((row, rowIndex) => {
+                    const isActiveRow = !row && rowIndex === meAttempts.length && !roundState?.finishedAt;
+                    return (
+                      <div key={rowIndex} className="row">
+                        {Array.from({ length: 5 }).map((_, colIndex) => {
+                          const letter = row?.guess?.[colIndex] || (isActiveRow ? input[colIndex] || "" : "");
+                          const status = row?.result?.[colIndex];
+                          return (
+                            <div key={colIndex} className={cellClass(status)}>
+                              {letter}
+                            </div>
+                          );
+                        })}
                       </div>
-                    ) : null}
-                    <div className="bubble-actions">
-                      <button type="button" className="bubble-action" onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}>↩</button>
-                      <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>☺</button>
-                    </div>
-                    <div className="sender">{message.name}</div>
-                    <div>{message.text}</div>
-                    {activeEmojiMessageId === message.id ? (
-                      <div className="floating-reactions">
-                        {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
-                          <button key={emoji} type="button" className="reaction-chip" onClick={() => reactToMessage(message.id, emoji)}>
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="reaction-row">
-                      {Object.entries(message.reactions || {}).length > 0 ? (
-                        <div className="reaction-stack">
-                          {Object.values(message.reactions || {}).reduce((acc, value) => {
-                            acc[value] = (acc[value] || 0) + 1;
-                            return acc;
-                          }, {}) &&
-                            Object.entries(Object.values(message.reactions || {}).reduce((acc, value) => {
-                              acc[value] = (acc[value] || 0) + 1;
-                              return acc;
-                            }, {})).map(([emoji, count]) => (
-                              <span key={emoji} className="reaction-count">{emoji} {count}</span>
-                            ))}
-                        </div>
+                    );
+                  })}
+                </div>
+
+                <div className="keyboard">
+                  {["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"].map((row, rowIndex) => (
+                    <div key={rowIndex} className="keyboard-row">
+                      {row.split("").map((key) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`key ${keyboardState[key] || ""}`}
+                          onClick={() => handleGuessInput(key.toLowerCase())}
+                          disabled={!canPlay}
+                        >
+                          {key}
+                        </button>
+                      ))}
+                      {rowIndex === 2 ? (
+                        <button
+                          type="button"
+                          className="key wide"
+                          onClick={() => setInput((value) => value.slice(0, -1))}
+                          disabled={!canPlay}
+                        >
+                          ⌫
+                        </button>
                       ) : null}
                     </div>
+                  ))}
+                </div>
+
+                <form className="guess-form" onSubmit={onSubmitGuess}>
+                  <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>
+                    Enter
+                  </button>
+                </form>
+
+                {chatError ? <div className="error-banner">{chatError}</div> : null}
+
+                <div className="footer-row">
+                  <div className="hint">Aynı oda kodunda chat korunur, 5 round sonrası yeni match başlatılır.</div>
+                </div>
+              </div>
+            </section>
+
+            <aside className="chat-pane">
+              <div className="chat-shell">
+                <div className="chat-header">
+                  <div>
+                    <div className="chat-title">Chat</div>
+                    <div className="chat-subtitle">Room only</div>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-            <form className="chat-form" onSubmit={onSubmitChat}>
-              <button type="button" className="emoji-shortcut" onClick={() => appendEmoji("🙂")}>☺</button>
-              {replyTo ? (
-                <div className="reply-composer">
-                  Replying to {replyTo.name}: {replyTo.text}
-                  <button type="button" onClick={() => setReplyTo(null)}>x</button>
+                <div className="messages">
+                  {(state?.messages || []).map((message) => (
+                    <div
+                      key={message.id}
+                      className={`message ${message.playerId === you.playerId ? "mine" : ""}`}
+                      onMouseLeave={() => setActiveEmojiMessageId(null)}
+                    >
+                      <div className="bubble">
+                        {message.replyTo ? (
+                          <div className="reply-pill">
+                            Replying to {message.replyTo.name}: {message.replyTo.text}
+                          </div>
+                        ) : null}
+                        <div className="bubble-actions">
+                          <button
+                            type="button"
+                            className="bubble-action"
+                            onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
+                          >
+                            ↩
+                          </button>
+                          <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>
+                            ☺
+                          </button>
+                        </div>
+                        <div className="sender">{message.name}</div>
+                        <div>{message.text}</div>
+                        {activeEmojiMessageId === message.id ? (
+                          <div className="floating-reactions">
+                            {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className="reaction-chip"
+                                onClick={() => reactToMessage(message.id, emoji)}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="reaction-row">
+                          {Object.entries(message.reactions || {}).length > 0 ? (
+                            <div className="reaction-stack">
+                              {Object.entries(
+                                Object.values(message.reactions || {}).reduce((acc, value) => {
+                                  acc[value] = (acc[value] || 0) + 1;
+                                  return acc;
+                                }, {})
+                              ).map(([emoji, count]) => (
+                                <span key={emoji} className="reaction-count">
+                                  {emoji} {count}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
                 </div>
-              ) : null}
-              <input
-                value={chat}
-                onChange={(e) => setChat(e.target.value)}
-                placeholder="Message..."
-                maxLength={240}
-              />
-              <button type="submit">Send</button>
-            </form>
-          </div>
-        </aside>
+                <form className="chat-form" onSubmit={onSubmitChat}>
+                  <button type="button" className="emoji-shortcut" onClick={() => appendEmoji("🙂")}>
+                    ☺
+                  </button>
+                  {replyTo ? (
+                    <div className="reply-composer">
+                      Replying to {replyTo.name}: {replyTo.text}
+                      <button type="button" onClick={() => setReplyTo(null)}>
+                        x
+                      </button>
+                    </div>
+                  ) : null}
+                  <input
+                    value={chat}
+                    onChange={(e) => setChat(e.target.value)}
+                    placeholder="Message..."
+                    maxLength={240}
+                  />
+                  <button type="submit">Send</button>
+                </form>
+              </div>
+            </aside>
           </>
         ) : null}
       </main>

@@ -3,10 +3,22 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { WebSocketServer } from "ws";
-import { addMessage, createRoom, guess, joinRoom, nextRound, replyToMessage, roomSnapshot, toggleReaction } from "./game.js";
+import {
+  addMessage,
+  createRoom,
+  guess,
+  joinRoom,
+  nextRound,
+  playAgain,
+  replyToMessage,
+  roomSnapshot,
+  scheduleNextRound,
+  toggleReaction
+} from "./game.js";
 
 const PORT = process.env.PORT || 3001;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
+const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN === "*" ? true : CLIENT_ORIGIN }));
@@ -14,21 +26,55 @@ app.use(express.json());
 
 const rooms = new Map();
 
-function getRoom(roomId) {
-  return rooms.get(roomId);
+function normalizeRoomCode(value) {
+  return String(value ?? "").trim().toUpperCase();
 }
 
-async function getOrCreateRoom(roomId) {
-  if (!rooms.has(roomId)) {
-    rooms.set(roomId, await createRoom(roomId));
+function generateRoomCode() {
+  let code = "";
+  for (let i = 0; i < 6; i += 1) {
+    code += ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)];
   }
-  return rooms.get(roomId);
+  return code;
+}
+
+async function createUniqueRoomId() {
+  let roomId = generateRoomCode();
+  while (rooms.has(roomId)) {
+    roomId = generateRoomCode();
+  }
+  return roomId;
 }
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+app.post("/api/rooms", async (req, res) => {
+  const name = String(req.body?.name ?? "").trim().slice(0, 24);
+  const playerId = String(req.body?.playerId ?? "").trim() || `p-${Math.random().toString(16).slice(2)}`;
+  if (!name) {
+    res.status(400).json({ error: "name_required" });
+    return;
+  }
+
+  const roomId = await createUniqueRoomId();
+  const room = await createRoom(roomId, { playerId, name });
+  rooms.set(roomId, room);
+  res.status(201).json(roomSnapshot(room));
+});
+
+app.get("/api/rooms/:roomId", (req, res) => {
+  const roomId = normalizeRoomCode(req.params.roomId);
+  const room = rooms.get(roomId);
+  if (!room) {
+    res.status(404).json({ error: "room_not_found" });
+    return;
+  }
+  res.json(roomSnapshot(room));
+});
+
 app.get("/api/room/:roomId", (req, res) => {
-  const room = rooms.get(req.params.roomId);
+  const roomId = normalizeRoomCode(req.params.roomId);
+  const room = rooms.get(roomId);
   if (!room) {
     res.status(404).json({ error: "room_not_found" });
     return;
@@ -55,14 +101,26 @@ function broadcast(roomId) {
 
 wss.on("connection", async (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const roomId = url.searchParams.get("roomId") || "lobby";
+  const roomId = normalizeRoomCode(url.searchParams.get("roomId"));
   const playerId = url.searchParams.get("playerId") || `p-${Math.random().toString(16).slice(2)}`;
   const name = url.searchParams.get("name") || "Player";
   ws.roomId = roomId;
   ws.playerId = playerId;
 
-  const room = await getOrCreateRoom(roomId);
-  joinRoom(room, playerId, name);
+  const room = rooms.get(roomId);
+  if (!room) {
+    ws.send(JSON.stringify({ type: "error", error: "room_not_found" }));
+    ws.close();
+    return;
+  }
+
+  const joinResult = joinRoom(room, playerId, name);
+  if (!joinResult.ok) {
+    ws.send(JSON.stringify({ type: "error", error: joinResult.error }));
+    ws.close();
+    return;
+  }
+
   broadcast(roomId);
 
   ws.send(JSON.stringify({ type: "state", state: roomSnapshot(room), you: { playerId, name } }));
@@ -74,10 +132,19 @@ wss.on("connection", async (ws, req) => {
     } catch {
       return;
     }
-    const currentRoom = await getOrCreateRoom(roomId);
+    const currentRoom = rooms.get(roomId);
+    if (!currentRoom) {
+      ws.send(JSON.stringify({ type: "error", error: "room_not_found" }));
+      return;
+    }
 
-    if (data.type === "join") {
-      joinRoom(currentRoom, playerId, data.name || name);
+    if (data.type === "join_room" || data.type === "join") {
+      const join = joinRoom(currentRoom, playerId, data.name || name);
+      if (!join.ok) {
+        ws.send(JSON.stringify({ type: "join_result", ok: false, error: join.error }));
+        return;
+      }
+      ws.send(JSON.stringify({ type: "join_result", ok: true }));
       broadcast(roomId);
       return;
     }
@@ -86,12 +153,9 @@ wss.on("connection", async (ws, req) => {
       const result = await guess(currentRoom, playerId, data.value);
       if (result.ok) {
         if (result.roundEnded) {
-          setTimeout(async () => {
-            const activeRoom = rooms.get(roomId);
-            if (!activeRoom || activeRoom !== currentRoom) return;
-            await nextRound(currentRoom);
-            broadcast(roomId);
-          }, 1200);
+          if (!result.matchEnded) {
+            scheduleNextRound(currentRoom, () => broadcast(roomId));
+          }
         }
         broadcast(roomId);
       }
@@ -118,8 +182,23 @@ wss.on("connection", async (ws, req) => {
     }
 
     if (data.type === "next_round") {
-      await nextRound(currentRoom);
-      broadcast(roomId);
+      const result = await nextRound(currentRoom);
+      if (result.ok) {
+        broadcast(roomId);
+      } else {
+        ws.send(JSON.stringify({ type: "next_round_result", ...result }));
+      }
+      return;
+    }
+
+    if (data.type === "play_again") {
+      const result = await playAgain(currentRoom);
+      if (result.ok) {
+        broadcast(roomId);
+        ws.send(JSON.stringify({ type: "play_again_result", ok: true }));
+      } else {
+        ws.send(JSON.stringify({ type: "play_again_result", ...result }));
+      }
     }
   });
 

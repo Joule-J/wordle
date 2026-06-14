@@ -160,11 +160,33 @@ input:focus {
   display: grid;
   gap: 10px;
   align-content: center;
+  max-width: 420px;
 }
 
 .landing-form label {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.landing-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.landing-actions button,
+.play-again-button {
+  padding: 0.82rem 1.05rem;
+  border-radius: 999px;
+  background: var(--key);
+  color: white;
+  font-weight: 700;
+}
+
+.play-again-button {
+  align-self: flex-start;
+  background: var(--good);
 }
 
 .board-pane,
@@ -190,6 +212,50 @@ input:focus {
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
+}
+
+.match-banner {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 18px 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.match-banner-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.match-banner-title {
+  display: grid;
+  gap: 4px;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.match-banner-title span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.match-banner-copy {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.match-badge {
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  padding: 0.45rem 0.8rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .grid {
@@ -241,7 +307,11 @@ input:focus {
   justify-content: center;
 }
 
-.guess-form button,
+.guess-submit {
+  min-width: 160px;
+}
+
+.guess-submit,
 .inline-controls button,
 .chat-form button {
   padding: 0.82rem 1.05rem;
@@ -249,10 +319,6 @@ input:focus {
   background: var(--key);
   color: white;
   font-weight: 700;
-}
-
-.guess-submit {
-  min-width: 160px;
 }
 
 .keyboard {
@@ -603,6 +669,15 @@ input:focus {
 
   .landing-card {
     padding: 20px;
+  }
+
+  .landing-actions {
+    flex-direction: column;
+  }
+
+  .landing-actions button,
+  .play-again-button {
+    width: 100%;
   }
 
   .cell {
