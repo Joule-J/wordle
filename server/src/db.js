@@ -3,14 +3,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 let prismaClientPromise = null;
 
-function cleanUrl(value) {
-  return String(value ?? "")
-    .trim()
-    .replace(/^["']|["']$/g, "");
-}
-
 export async function getPrismaClient() {
-  const databaseUrl = cleanUrl(process.env.DATABASE_URL);
+  const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     return null;
   }
