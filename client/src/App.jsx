@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
-  (import.meta.env.DEV ? "http://localhost:3001" : "https://wordle.onrender.com");
+  (import.meta.env.DEV ? "http://localhost:3001" : "https://wordle-9iz0.onrender.com");
 
 function getId() {
   return localStorage.getItem("wordle_player_id") || (() => {
