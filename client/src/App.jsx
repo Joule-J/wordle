@@ -37,6 +37,7 @@ export default function App() {
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
   const [joined, setJoined] = useState(false);
+  const [activeEmojiMessageId, setActiveEmojiMessageId] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -195,6 +196,14 @@ export default function App() {
     send("reaction", { messageId, emoji });
   }
 
+  function openEmojiBar(messageId) {
+    setActiveEmojiMessageId((current) => (current === messageId ? null : messageId));
+  }
+
+  function appendEmoji(emoji) {
+    setChat((value) => `${value}${emoji}`);
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -322,36 +331,55 @@ export default function App() {
             </div>
             <div className="messages">
               {(state?.messages || []).map((message) => (
-                <div key={message.id} className={`message ${message.playerId === you.playerId ? "mine" : ""}`}>
+                <div
+                  key={message.id}
+                  className={`message ${message.playerId === you.playerId ? "mine" : ""}`}
+                  onMouseLeave={() => setActiveEmojiMessageId(null)}
+                >
                   <div className="bubble">
                     {message.replyTo ? (
                       <div className="reply-pill">
                         Replying to {message.replyTo.name}: {message.replyTo.text}
                       </div>
                     ) : null}
+                    <div className="bubble-actions">
+                      <button type="button" className="bubble-action" onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}>↩</button>
+                      <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>☺</button>
+                    </div>
                     <div className="sender">{message.name}</div>
                     <div>{message.text}</div>
-                    <div className="reactions">
-                      {["❤️", "😂", "👍", "🔥"].map((emoji) => (
-                        <button key={emoji} type="button" className="reaction-btn" onClick={() => reactToMessage(message.id, emoji)}>
-                          {emoji}
-                          {Object.values(message.reactions || {}).filter((value) => value === emoji).length > 0 ? <span>{Object.values(message.reactions || {}).filter((value) => value === emoji).length}</span> : null}
-                        </button>
-                      ))}
+                    {activeEmojiMessageId === message.id ? (
+                      <div className="floating-reactions">
+                        {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
+                          <button key={emoji} type="button" className="reaction-chip" onClick={() => reactToMessage(message.id, emoji)}>
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="reaction-row">
+                      {Object.entries(message.reactions || {}).length > 0 ? (
+                        <div className="reaction-stack">
+                          {Object.values(message.reactions || {}).reduce((acc, value) => {
+                            acc[value] = (acc[value] || 0) + 1;
+                            return acc;
+                          }, {}) &&
+                            Object.entries(Object.values(message.reactions || {}).reduce((acc, value) => {
+                              acc[value] = (acc[value] || 0) + 1;
+                              return acc;
+                            }, {})).map(([emoji, count]) => (
+                              <span key={emoji} className="reaction-count">{emoji} {count}</span>
+                            ))}
+                        </div>
+                      ) : null}
                     </div>
-                    <button
-                      type="button"
-                      className="reply-btn"
-                      onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
-                    >
-                      Reply
-                    </button>
                   </div>
                 </div>
               ))}
               <div ref={messagesEndRef} />
             </div>
             <form className="chat-form" onSubmit={onSubmitChat}>
+              <button type="button" className="emoji-shortcut" onClick={() => appendEmoji("🙂")}>☺</button>
               {replyTo ? (
                 <div className="reply-composer">
                   Replying to {replyTo.name}: {replyTo.text}
