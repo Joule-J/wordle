@@ -479,23 +479,29 @@ input:focus {
   justify-content: flex-end;
 }
 
-.bubble {
+.message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   max-width: 82%;
+}
+
+.message.mine .message-stack {
+  align-items: flex-end;
+}
+
+.bubble {
   padding: 12px 14px;
   border-radius: 18px;
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.05);
   position: relative;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .message.mine .bubble {
   background: #2a2f3d;
-}
-
-.sender {
-  font-size: 0.78rem;
-  color: var(--muted);
-  margin-bottom: 4px;
 }
 
 .bubble-actions {
@@ -553,17 +559,14 @@ input:focus {
 }
 
 .floating-reactions {
-  position: absolute;
-  right: -4px;
-  bottom: 100%;
-  margin-bottom: 8px;
   display: flex;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--line);
   padding: 8px;
   border-radius: 999px;
   backdrop-filter: blur(10px);
+  width: fit-content;
 }
 
 .reaction-chip {
@@ -578,7 +581,7 @@ input:focus {
 .reaction-row {
   display: flex;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 2px;
   flex-wrap: wrap;
 }
 
@@ -665,8 +668,9 @@ input:focus {
 .reply-pill {
   background: var(--panel-soft);
   border: 1px solid var(--line);
-  margin-bottom: 8px;
   font-size: 0.85rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
 @media (max-width: 1100px) {

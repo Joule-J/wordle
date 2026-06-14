@@ -555,26 +555,27 @@ export default function App() {
                       className={`message ${message.playerId === you.playerId ? "mine" : ""}`}
                       onMouseLeave={() => setActiveEmojiMessageId(null)}
                     >
-                      <div className="bubble">
+                      <div className="message-stack">
                         {message.replyTo ? (
                           <div className="reply-pill">
-                            Replying to {message.replyTo.name}: {message.replyTo.text}
+                            Replying to: {message.replyTo.text}
                           </div>
                         ) : null}
-                        <div className="bubble-actions">
-                          <button
-                            type="button"
-                            className="bubble-action"
-                            onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
-                          >
-                            ↩
-                          </button>
-                          <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>
-                            ☺
-                          </button>
+                        <div className="bubble">
+                          <div className="bubble-actions">
+                            <button
+                              type="button"
+                              className="bubble-action"
+                              onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
+                            >
+                              ↩
+                            </button>
+                            <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>
+                              ☺
+                            </button>
+                          </div>
+                          <div>{message.text}</div>
                         </div>
-                        <div className="sender">{message.name}</div>
-                        <div>{message.text}</div>
                         {activeEmojiMessageId === message.id ? (
                           <div className="floating-reactions">
                             {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
