@@ -23,10 +23,10 @@ const EMOJI_CATEGORIES = [
 
 function getId() {
   return (
-    localStorage.getItem("wordle_player_id") ||
+    sessionStorage.getItem("wordle_player_id") ||
     (() => {
       const id = `u-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem("wordle_player_id", id);
+      sessionStorage.setItem("wordle_player_id", id);
       return id;
     })()
   );
