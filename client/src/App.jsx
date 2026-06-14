@@ -74,6 +74,16 @@ export default function App() {
   useEffect(() => {
     if (!joined) return;
     function onKeyDown(event) {
+      const target = event.target;
+      const tagName = target?.tagName;
+      const isTypingField =
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+
+      if (isTypingField) {
+        return;
+      }
       if (!canPlay) return;
       if (event.key === "Enter") {
         if (input.length === 5) {
@@ -128,8 +138,10 @@ export default function App() {
 
   function onSubmitGuess(e) {
     e.preventDefault();
-    send("guess", { value: input.trim().toLowerCase() });
-    setInput("");
+    if (input.length === 5) {
+      send("guess", { value: input.trim().toLowerCase() });
+      setInput("");
+    }
   }
 
   function onSubmitChat(e) {
@@ -180,7 +192,7 @@ export default function App() {
                 <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} />
                 <label>Your name</label>
                 <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
-                <button onClick={enterRoom}>Enter room</button>
+                <button type="button" onClick={enterRoom}>Enter room</button>
               </div>
             </div>
           </section>
@@ -237,7 +249,7 @@ export default function App() {
             </div>
 
             <form className="guess-form" onSubmit={onSubmitGuess}>
-              <button className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
+              <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
             </form>
 
             <div className="footer-row">
@@ -272,7 +284,7 @@ export default function App() {
                 placeholder="Message..."
                 maxLength={240}
               />
-              <button>Send</button>
+              <button type="submit">Send</button>
             </form>
           </div>
         </aside>
