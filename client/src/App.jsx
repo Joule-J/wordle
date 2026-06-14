@@ -51,6 +51,8 @@ export default function App() {
   const [replyTo, setReplyTo] = useState(null);
   const [chatError, setChatError] = useState("");
   const [roomError, setRoomError] = useState("");
+  const [boardNotice, setBoardNotice] = useState("");
+  const [boardNoticeKind, setBoardNoticeKind] = useState("info");
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
@@ -135,6 +137,15 @@ export default function App() {
     setChatError("");
   }, [matchState?.startedAt, roundState?.roundNumber]);
 
+  useEffect(() => {
+    if (!boardNotice) return undefined;
+    const timer = window.setTimeout(() => {
+      setBoardNotice("");
+      setBoardNoticeKind("info");
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [boardNotice]);
+
   function connectToRoom(nextRoomCode, nextName) {
     socketRef.current?.close();
 
@@ -146,6 +157,8 @@ export default function App() {
     setStoredName(trimmedName);
     setStatus("Connecting...");
     setRoomError("");
+    setBoardNotice("");
+    setBoardNoticeKind("info");
 
     const wsUrl = API_BASE.replace(/^http/, "ws");
     const socket = new WebSocket(
@@ -191,13 +204,20 @@ export default function App() {
       if (data.type === "guess_result") {
         if (!data.ok) setStatus(data.error);
         if (!data.ok && data.error === "not_a_real_word") {
-          setChatError("That is not a real 5-letter word.");
+          setBoardNotice("Bu bir kelime değil.");
+          setBoardNoticeKind("error");
         }
         if (!data.ok && data.error === "guess_must_be_5_letters") {
-          setChatError("Enter exactly 5 letters.");
+          setBoardNotice("5 harf gir.");
+          setBoardNoticeKind("error");
+        }
+        if (!data.ok && data.error === "attempt_limit") {
+          setBoardNotice("Deneme hakkı bitti.");
+          setBoardNoticeKind("error");
         }
         if (data.ok) {
           setChatError("");
+          setInput("");
         }
         return;
       }
@@ -334,7 +354,7 @@ export default function App() {
 
   function handleGuessInput(char) {
     setInput((value) => (value.length < 5 ? `${value}${char}` : value));
-    setChatError("");
+    setBoardNotice("");
   }
 
   function reactToMessage(messageId, emoji) {
@@ -436,17 +456,24 @@ export default function App() {
                           ? "Round tamamlandı, sonraki tur hazırlanıyor."
                           : "Kelimeyi bul."}
                   </div>
-                  {roundTarget && roundState?.finishedAt ? (
-                    <div className="outcome-text">
-                      Answer: <strong>{roundTarget.toUpperCase()}</strong>
-                    </div>
-                  ) : null}
                   {matchFinished ? (
                     <button type="button" className="play-again-button" onClick={playAgain}>
                       Play Again
                     </button>
                   ) : null}
                 </div>
+
+                {boardNotice ? (
+                  <div className={`board-notice ${boardNoticeKind === "error" ? "is-error" : ""}`}>
+                    {boardNotice}
+                  </div>
+                ) : null}
+
+                {roundTarget && roundState?.finishedAt ? (
+                  <div className="board-notice is-answer">
+                    Doğru cevap: <strong>{roundTarget.toUpperCase()}</strong>
+                  </div>
+                ) : null}
 
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {

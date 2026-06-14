@@ -162,6 +162,11 @@ export async function guess(room, playerId, value) {
     return { ok: true, entry, ...progress, won: true };
   }
 
+  if (playerGuesses.length + 1 >= 6) {
+    const progress = finishRound(room, playerId, false);
+    return { ok: true, entry, ...progress, won: false, limitReached: true };
+  }
+
   const allAttempts = Object.values(room.round.attemptsByPlayer).flat();
   if (allAttempts.length >= 12) {
     const progress = finishRound(room, playerId, false);
