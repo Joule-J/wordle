@@ -1,18 +1,21 @@
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  --bg: #151515;
-  --panel: #191919;
-  --panel-soft: #202020;
-  --panel-soft-2: #2a2a2a;
-  --line: rgba(255, 255, 255, 0.14);
-  --line-strong: rgba(255, 255, 255, 0.28);
-  --text: #f5f5f5;
-  --muted: #a3a3a3;
-  --good: #6aaa64;
-  --mid: #c9b458;
-  --bad: #3a3a3c;
+  --bg: #1a1a1a;
+  --panel: #202020;
+  --panel-soft: rgba(255, 255, 255, 0.05);
+  --panel-2: #262626;
+  --text: #eef2ff;
+  --muted: #9aa4bf;
+  --accent: #7dd3fc;
+  --good: #22c55e;
+  --mid: #eab308;
+  --bad: #334155;
   --key: #9b9b9b;
+  --line: rgba(255,255,255,0.08);
+  --line-strong: rgba(255,255,255,0.18);
+  --tile-size: clamp(42px, 7.4vw, 72px);
+  --tile-gap: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -41,8 +44,8 @@ button {
 input {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--line);
-  background: #1f1f1f;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
   color: var(--text);
   padding: 0.82rem 0.95rem;
   border-radius: 999px;
@@ -67,7 +70,7 @@ input:focus {
   justify-content: space-between;
   padding: 0 28px;
   border-bottom: 1px solid var(--line);
-  background: rgba(18, 18, 18, 0.98);
+  background: #1f1f1f;
 }
 
 .topbar-left,
@@ -132,12 +135,13 @@ input:focus {
 .landing-card {
   width: min(760px, 100%);
   border: 1px solid var(--line);
-  background: #111111;
+  background: #202020;
   border-radius: 28px;
   padding: 28px;
   display: grid;
   gap: 24px;
   grid-template-columns: 1.1fr 0.9fr;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.24);
 }
 
 .landing-copy h2 {
@@ -190,25 +194,27 @@ input:focus {
 
 .grid {
   display: grid;
-  gap: 8px;
+  gap: var(--tile-gap);
   margin-top: 8px;
   flex: 0 0 auto;
+  width: fit-content;
 }
 
 .row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, var(--tile-size));
+  gap: var(--tile-gap);
+  width: fit-content;
 }
 
 .cell {
-  width: 72px;
-  height: 72px;
+  width: var(--tile-size);
+  aspect-ratio: 1;
   border: 2px solid #3a3a3c;
   display: grid;
   place-items: center;
   text-transform: uppercase;
-  font-size: 2rem;
+  font-size: clamp(1.25rem, 3vw, 2rem);
   font-weight: 700;
   background: transparent;
 }
@@ -246,7 +252,7 @@ input:focus {
 }
 
 .guess-submit {
-  min-width: 120px;
+  min-width: 160px;
 }
 
 .keyboard {
@@ -282,6 +288,7 @@ input:focus {
 
 .key.absent {
   background: #4a4a4a;
+  color: white;
 }
 
 .key.wide {
@@ -319,7 +326,7 @@ input:focus {
 
 .chat-pane {
   border-left: 1px solid var(--line);
-  background: #111111;
+  background: #1f1f1f;
   min-height: 0;
   overflow: hidden;
 }
@@ -459,6 +466,7 @@ input:focus {
   border-radius: 999px;
   background: #fff7eb;
   border: 1px solid var(--line);
+  color: var(--text);
 }
 
 .reaction-row {
@@ -555,23 +563,6 @@ input:focus {
   font-size: 0.85rem;
 }
 
-.current-guess {
-  display: grid;
-  grid-template-columns: repeat(5, 48px);
-  gap: 8px;
-  margin-right: 10px;
-}
-
-.guess-slot {
-  width: 48px;
-  height: 48px;
-  border: 2px solid var(--line-strong);
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-}
-
 @media (max-width: 1100px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -615,9 +606,7 @@ input:focus {
   }
 
   .cell {
-    width: 54px;
-    height: 54px;
-    font-size: 1.4rem;
+    font-size: 1.35rem;
   }
 
   .key {
@@ -641,7 +630,7 @@ input:focus {
   .chat-form {
     position: sticky;
     bottom: 0;
-    background: #111111;
+    background: #1f1f1f;
     padding-bottom: 2px;
   }
 }

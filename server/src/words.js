@@ -1,3 +1,5 @@
+import { getPrismaClient } from "./db.js";
+
 export const WORDS = [
   "apple",
   "brain",
@@ -21,38 +23,51 @@ export const WORDS = [
   "youth"
 ];
 
-const DATAMUSE_URL = "https://api.datamuse.com/words?sp=?????&max=1000";
 const DATAMUSE_VALIDATE_URL = (word) => `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&max=1`;
-let cachedApiWords = [];
-let cachedAt = 0;
 const validWordCache = new Map();
 
 export async function pickWord() {
-  const apiWords = await loadWordsFromApi();
-  const pool = apiWords.length > 0 ? apiWords : WORDS;
-  return pool[Math.floor(Math.random() * pool.length)];
+  const pool = await getUnusedWordPool();
+  const word = pool[Math.floor(Math.random() * pool.length)];
+  if (!word) {
+    throw new Error("No words available");
+  }
+  try {
+    const prisma = await getPrismaClient();
+    if (prisma) {
+      await prisma.usedWord.upsert({
+        where: { word },
+        create: { word },
+        update: { pickedAt: new Date() }
+      });
+    }
+  } catch {
+    // Keep the game playable if the database write fails.
+  }
+
+  return word;
 }
 
-async function loadWordsFromApi() {
-  const now = Date.now();
-  if (cachedApiWords.length > 0 && now - cachedAt < 1000 * 60 * 30) {
-    return cachedApiWords;
+async function getUnusedWordPool() {
+  const prisma = await getPrismaClient();
+  if (!prisma) {
+    return WORDS;
   }
 
   try {
-    const response = await fetch(DATAMUSE_URL);
-    if (!response.ok) {
-      return [];
+    const usedWords = await prisma.usedWord.findMany({
+      select: { word: true }
+    });
+    const usedSet = new Set(usedWords.map((entry) => entry.word));
+    const remaining = WORDS.filter((word) => !usedSet.has(word));
+    if (remaining.length > 0) {
+      return remaining;
     }
-    const data = await response.json();
-    const words = data
-      .map((item) => item.word)
-      .filter((word) => typeof word === "string" && /^[a-z]{5}$/.test(word.toLowerCase()));
-    cachedApiWords = [...new Set(words)];
-    cachedAt = now;
-    return cachedApiWords;
+
+    await prisma.usedWord.deleteMany();
+    return WORDS;
   } catch {
-    return [];
+    return WORDS;
   }
 }
 

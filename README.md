@@ -25,6 +25,18 @@ MVP for a 2-player online Wordle game with room chat.
 
 Set `VITE_API_BASE` on the frontend to the Render backend URL.
 
+## Supabase setup
+
+1. Create a Postgres database in Supabase.
+2. Put these values into `server/.env.local` and the Render environment variables:
+   - `DATABASE_URL`
+   - `DIRECT_URL`
+3. Run the backend once so Prisma can create the `UsedWord` table:
+   ```bash
+   npm run prisma:sync -w server
+   ```
+4. The word pool is stored in Supabase and the same target word will not be picked again until the pool resets.
+
 ## Current MVP behavior
 
 - 2-player room-based play

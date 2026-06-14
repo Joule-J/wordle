@@ -302,13 +302,6 @@ export default function App() {
             </div>
 
             <form className="guess-form" onSubmit={onSubmitGuess}>
-              <div className="current-guess">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <div key={index} className="guess-slot">
-                    {input[index]?.toUpperCase() || ""}
-                  </div>
-                ))}
-              </div>
               <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
             </form>
 

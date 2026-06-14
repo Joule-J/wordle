@@ -1,3 +1,4 @@
+import "./env.js";
 import express from "express";
 import http from "http";
 import cors from "cors";
@@ -73,7 +74,7 @@ wss.on("connection", async (ws, req) => {
     } catch {
       return;
     }
-      const currentRoom = await getOrCreateRoom(roomId);
+    const currentRoom = await getOrCreateRoom(roomId);
 
     if (data.type === "join") {
       joinRoom(currentRoom, playerId, data.name || name);
