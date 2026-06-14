@@ -3,13 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 model UsedWord {
   word     String   @id
   pickedAt DateTime @default(now())
 }
-
