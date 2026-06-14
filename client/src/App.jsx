@@ -47,6 +47,25 @@ function replyPreviewText(text, limit = 72) {
   return `${value.slice(0, limit - 1)}…`;
 }
 
+function isEmojiOnlyMessage(text) {
+  const trimmedText = String(text ?? "").trim();
+
+  if (!trimmedText) {
+    return false;
+  }
+
+  const emojiPattern =
+    /^(?:\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier})?)*|\p{Regional_Indicator}{2}|[0-9#*]\uFE0F?\u20E3)$/u;
+
+  if (typeof Intl?.Segmenter !== "function") {
+    return false;
+  }
+
+  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(trimmedText);
+
+  return Array.from(segments).every(({ segment }) => /^\s+$/u.test(segment) || emojiPattern.test(segment));
+}
+
 export default function App() {
   const [roomCode, setRoomCode] = useState("");
   const [roomCodeDraft, setRoomCodeDraft] = useState("");
@@ -65,6 +84,7 @@ export default function App() {
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
   const [joined, setJoined] = useState(false);
+  const [activeMessageActionId, setActiveMessageActionId] = useState(null);
   const [activeEmojiMessageId, setActiveEmojiMessageId] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -87,6 +107,12 @@ export default function App() {
     while (rows.length < 6) rows.push(null);
     return rows;
   }, [meAttempts]);
+
+  const keyboardRows = [
+    "QWERTYUIOP".split(""),
+    "ASDFGHJKL".split(""),
+    ["ENTER", ..."ZXCVBNM".split(""), "BACKSPACE"]
+  ];
 
   const keyboardState = useMemo(() => {
     const order = { correct: 3, present: 2, absent: 1 };
@@ -151,6 +177,9 @@ export default function App() {
   useEffect(() => {
     if (!joined) {
       setComposerEmojiOpen(false);
+      setActiveMessageActionId(null);
+      setActiveEmojiMessageId(null);
+      setReplyTo(null);
     }
   }, [joined]);
 
@@ -293,6 +322,9 @@ export default function App() {
     send("chat", { text, name, replyTo: replyTo?.id || null });
     setChat("");
     setReplyTo(null);
+    setComposerEmojiOpen(false);
+    setActiveMessageActionId(null);
+    setActiveEmojiMessageId(null);
     setChatError("");
   }
 
@@ -382,9 +414,11 @@ export default function App() {
 
   function reactToMessage(messageId, emoji) {
     send("reaction", { messageId, emoji });
+    setActiveEmojiMessageId(null);
   }
 
   function openEmojiBar(messageId) {
+    setActiveMessageActionId(messageId);
     setActiveEmojiMessageId((current) => (current === messageId ? null : messageId));
   }
 
@@ -393,12 +427,13 @@ export default function App() {
   }
 
   function toggleComposerEmojiPanel() {
+    setActiveMessageActionId(null);
+    setActiveEmojiMessageId(null);
     setComposerEmojiOpen((current) => !current);
   }
 
   function pickComposerEmoji(emoji) {
     appendEmoji(emoji);
-    setComposerEmojiOpen(false);
   }
 
   function playAgain() {
@@ -516,38 +551,57 @@ export default function App() {
                 </div>
 
                 <div className="keyboard">
-                  {["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"].map((row, rowIndex) => (
+                  {keyboardRows.map((row, rowIndex) => (
                     <div key={rowIndex} className="keyboard-row">
-                      {row.split("").map((key) => (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`key ${keyboardState[key] || ""}`}
-                          onClick={() => handleGuessInput(key.toLowerCase())}
-                          disabled={!canPlay}
-                        >
-                          {key}
-                        </button>
-                      ))}
-                      {rowIndex === 2 ? (
-                        <button
-                          type="button"
-                          className="key wide"
-                          onClick={() => setInput((value) => value.slice(0, -1))}
-                          disabled={!canPlay}
-                        >
-                          ⌫
-                        </button>
-                      ) : null}
+                      {row.map((key) => {
+                        if (key === "ENTER") {
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className="key wide enter-key"
+                              onClick={() => {
+                                if (input.length === 5) {
+                                  send("guess", { value: input.trim().toLowerCase() });
+                                }
+                              }}
+                              disabled={!canPlay || input.length !== 5}
+                            >
+                              Enter
+                            </button>
+                          );
+                        }
+
+                        if (key === "BACKSPACE") {
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              className="key wide icon-key"
+                              onClick={() => setInput((value) => value.slice(0, -1))}
+                              disabled={!canPlay}
+                              aria-label="Backspace"
+                            >
+                              ⌫
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            className={`key ${keyboardState[key] || ""}`}
+                            onClick={() => handleGuessInput(key.toLowerCase())}
+                            disabled={!canPlay}
+                          >
+                            {key}
+                          </button>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
-
-                <form className="guess-form" onSubmit={onSubmitGuess}>
-                  <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>
-                    Enter
-                  </button>
-                </form>
 
                 {chatError ? <div className="error-banner">{chatError}</div> : null}
 
@@ -563,45 +617,44 @@ export default function App() {
                   {(state?.messages || []).map((message) => (
                     <div
                       key={message.id}
-                      className={`message ${message.playerId === you.playerId ? "mine" : ""}`}
-                      onMouseLeave={() => setActiveEmojiMessageId(null)}
+                      className={`message ${activeEmojiMessageId === message.id ? "is-active" : ""} ${
+                        Object.keys(message.reactions || {}).length > 0 ? "has-reactions" : ""
+                      }`}
                     >
-                      <div className="message-stack">
-                        <div className="bubble-row">
-                          <div className="bubble">
-                            {message.replyTo ? (
-                              <div className="reply-pill">
-                                <span className="reply-author">{message.replyTo.name}</span>
-                                <span>{replyPreviewText(message.replyTo.text, 54)}</span>
-                              </div>
+                      <div
+                        className={`message-stack ${message.playerId === you.playerId ? "mine" : ""}`}
+                        onMouseEnter={() => setActiveMessageActionId(message.id)}
+                        onMouseLeave={() => {
+                          setActiveMessageActionId((current) => (current === message.id ? null : current));
+                          setActiveEmojiMessageId((current) => (current === message.id ? null : current));
+                        }}
+                      >
+                        {message.replyTo ? (
+                          <button
+                            type="button"
+                            className="reply-pill"
+                            onClick={() =>
+                              setReplyTo({
+                                id: message.replyTo.id,
+                                name: message.replyTo.name,
+                                text: message.replyTo.text
+                              })
+                            }
+                          >
+                            <span className="reply-author">{message.replyTo.name}</span>
+                            <span>{replyPreviewText(message.replyTo.text, 54)}</span>
+                          </button>
+                        ) : null}
+                        <div className="bubble">
+                            {isEmojiOnlyMessage(message.text) ? (
+                              <span className="emoji-message">{message.text}</span>
                             ) : null}
-                            <div>{message.text}</div>
-                            {Object.entries(message.reactions || {}).length > 0 ? (
-                              <div className="reaction-row is-attached">
-                                <div className="reaction-stack">
-                                  {Object.entries(
-                                    Object.values(message.reactions || {}).reduce((acc, value) => {
-                                      acc[value] = (acc[value] || 0) + 1;
-                                      return acc;
-                                    }, {})
-                                  ).map(([emoji, count]) => (
-                                    <span key={emoji} className="reaction-count">
-                                      {emoji} {count}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="bubble-actions">
-                            <button
-                              type="button"
-                              className="bubble-action"
-                              aria-label="Reply to message"
-                              onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
-                            >
-                              ↩
-                            </button>
+                            {!isEmojiOnlyMessage(message.text) ? <p>{message.text}</p> : null}
+                          <div
+                            className={`bubble-actions ${
+                              activeMessageActionId === message.id ? "is-open" : ""
+                            } ${message.playerId === you.playerId ? "mine" : "other"}`}
+                          >
                             <button
                               type="button"
                               className="bubble-action"
@@ -610,72 +663,115 @@ export default function App() {
                             >
                               ☺
                             </button>
-                            {activeEmojiMessageId === message.id ? (
-                              <div className="floating-reactions">
-                                {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
-                                  <button
-                                    key={emoji}
-                                    type="button"
-                                    className="reaction-chip"
-                                    onClick={() => reactToMessage(message.id, emoji)}
-                                    aria-label={`React with ${emoji}`}
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
+                            <button
+                              type="button"
+                              className="bubble-action"
+                              aria-label="Reply to message"
+                              onClick={() => {
+                                setReplyTo({ id: message.id, name: message.name, text: message.text });
+                                setActiveMessageActionId(null);
+                                setActiveEmojiMessageId(null);
+                              }}
+                            >
+                              ↩
+                            </button>
                           </div>
+                          {activeEmojiMessageId === message.id ? (
+                            <div className="floating-reactions">
+                              {["❤️", "🫠", "🤔", "😢", "😘", "😂"].map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className={`reaction-chip ${
+                                    message.reactions?.[you.playerId] === emoji ? "is-selected" : ""
+                                  }`}
+                                  onClick={() => reactToMessage(message.id, emoji)}
+                                  aria-label={`React with ${emoji}`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
+                        {Object.entries(message.reactions || {}).length > 0 ? (
+                          <div className="reaction-bubble-row">
+                            {Array.from(new Set(Object.values(message.reactions || {}))).map((emoji) => (
+                              <button
+                                key={`${message.id}-${emoji}`}
+                                type="button"
+                                className={`reaction-bubble ${
+                                  message.reactions?.[you.playerId] === emoji ? "is-selected" : ""
+                                }`}
+                                onClick={() => reactToMessage(message.id, emoji)}
+                                aria-label={`Reaction ${emoji}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
                 <form className="chat-form" onSubmit={onSubmitChat}>
-                  {replyTo ? (
-                    <div className="reply-composer">
-                      <div className="reply-composer-bubble">
-                        <div className="reply-composer-label">Replying to {replyTo.name}</div>
-                        <div>{replyPreviewText(replyTo.text)}</div>
-                      </div>
-                      <button type="button" className="reply-dismiss" aria-label="Cancel reply" onClick={() => setReplyTo(null)}>
-                        ×
-                      </button>
-                    </div>
-                  ) : null}
-                  <div className="chat-input-row">
-                    <div className="emoji-wrap">
-                      <button
-                        type="button"
-                        className={`emoji-shortcut ${composerEmojiOpen ? "is-open" : ""}`}
-                        onClick={toggleComposerEmojiPanel}
-                        aria-label="Open emoji picker"
-                      >
-                        ☺
-                      </button>
-                      {composerEmojiOpen ? (
-                        <div className="composer-emoji-panel">
-                          {["🙂", "😂", "🔥", "❤️", "👍", "🎉", "👀", "😮"].map((emoji) => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              className="composer-emoji-chip"
-                              onClick={() => pickComposerEmoji(emoji)}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
+                  <div className="chat-controls">
+                    {replyTo ? (
+                      <div className="reply-composer">
+                        <div className="reply-composer-bubble">
+                          <div className="reply-composer-label">Replying to {replyTo.name}</div>
+                          <div>{replyPreviewText(replyTo.text)}</div>
                         </div>
-                      ) : null}
+                        <button
+                          type="button"
+                          className="reply-dismiss"
+                          aria-label="Cancel reply"
+                          onClick={() => setReplyTo(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : null}
+                    <div className="chat-input-row">
+                      <div className="emoji-wrap">
+                        <button
+                          type="button"
+                          className={`emoji-shortcut ${composerEmojiOpen ? "is-open" : ""}`}
+                          onClick={toggleComposerEmojiPanel}
+                          aria-label="Open emoji picker"
+                        >
+                          ☺
+                        </button>
+                        {composerEmojiOpen ? (
+                          <div className="composer-emoji-panel">
+                            <div className="composer-emoji-row">
+                              {["❤️", "🫠", "🤔", "😢", "😘", "😂"].map((emoji) => (
+                                  <button
+                                    key={`composer-${emoji}`}
+                                    type="button"
+                                    className="composer-emoji-chip"
+                                    onClick={() => pickComposerEmoji(emoji)}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              <button type="button" className="composer-emoji-chip more" onClick={() => appendEmoji("✨")}>
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <input
+                        value={chat}
+                        onChange={(e) => setChat(e.target.value)}
+                        placeholder="Write a message"
+                        maxLength={240}
+                      />
+                      <button type="submit">Send</button>
                     </div>
-                    <input
-                      value={chat}
-                      onChange={(e) => setChat(e.target.value)}
-                      placeholder="Message..."
-                      maxLength={240}
-                    />
-                    <button type="submit">Send</button>
                   </div>
                 </form>
               </div>
