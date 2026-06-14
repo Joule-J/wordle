@@ -383,13 +383,6 @@ export default function App() {
     setChat((value) => `${value}${emoji}`);
   }
 
-  function openReplyComposer(message) {
-    setReplyTo({ id: message.id, name: message.name, text: message.text });
-    if (!chat.trim()) {
-      setChat(`@${message.name} `);
-    }
-  }
-
   function toggleComposerEmojiPanel() {
     setComposerEmojiOpen((current) => !current);
   }
@@ -569,7 +562,7 @@ export default function App() {
             </section>
 
             <aside className="chat-pane">
-              <div className="chat-shell">
+                <div className="chat-shell">
                 <div className="messages">
                   {(state?.messages || []).map((message) => (
                     <div
@@ -584,25 +577,19 @@ export default function App() {
                           </div>
                         ) : null}
                         <div className="bubble">
+                          <div className="bubble-actions">
+                            <button
+                              type="button"
+                              className="bubble-action"
+                              onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
+                            >
+                              ↩
+                            </button>
+                            <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>
+                              ☺
+                            </button>
+                          </div>
                           <div>{message.text}</div>
-                        </div>
-                        <div className="message-actions">
-                          <button
-                            type="button"
-                            className="message-action left"
-                            aria-label="reply"
-                            onClick={() => openReplyComposer(message)}
-                          >
-                            ↩
-                          </button>
-                          <button
-                            type="button"
-                            className="message-action right"
-                            aria-label="emoji"
-                            onClick={() => openEmojiBar(message.id)}
-                          >
-                            🙂
-                          </button>
                         </div>
                         {activeEmojiMessageId === message.id ? (
                           <div className="floating-reactions">
@@ -665,16 +652,8 @@ export default function App() {
                   </div>
                   {replyTo ? (
                     <div className="reply-composer">
-                      <div className="reply-composer-label">Replying to</div>
-                      <div className="reply-composer-text">{replyTo.text}</div>
-                      <button
-                        type="button"
-                        className="reply-composer-close"
-                        onClick={() => {
-                          setReplyTo(null);
-                          setChat((value) => value.replace(/^@\S+\s*/, ""));
-                        }}
-                      >
+                      Replying to {replyTo.name}: {replyTo.text}
+                      <button type="button" onClick={() => setReplyTo(null)}>
                         x
                       </button>
                     </div>
