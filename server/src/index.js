@@ -21,7 +21,29 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
 const ROOM_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 const app = express();
-app.use(cors({ origin: CLIENT_ORIGIN === "*" ? true : CLIENT_ORIGIN }));
+
+function normalizeOrigin(origin) {
+  const value = String(origin ?? "").trim();
+  if (!value) return null;
+  if (value === "*") return "*";
+  if (value.includes("://")) return value;
+  return `https://${value}`;
+}
+
+function parseAllowedOrigins(value) {
+  const normalized = String(value ?? "")
+    .split(",")
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean);
+
+  if (normalized.includes("*")) {
+    return "*";
+  }
+
+  return normalized.length > 0 ? normalized : "*";
+}
+
+app.use(cors({ origin: parseAllowedOrigins(CLIENT_ORIGIN) }));
 app.use(express.json());
 
 const rooms = new Map();
