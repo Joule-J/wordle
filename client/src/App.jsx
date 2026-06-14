@@ -192,11 +192,11 @@ export default function App() {
           <div className="board-shell">
             <div className="grid">
               {boardRows.map((row, rowIndex) => {
-                const currentGuess = row ? row.guess : input;
+                const isActiveRow = !row && rowIndex === meAttempts.length && !roomState?.finishedAt;
                 return (
                   <div key={rowIndex} className="row">
                     {Array.from({ length: 5 }).map((_, colIndex) => {
-                      const letter = currentGuess?.[colIndex] || "";
+                      const letter = row?.guess?.[colIndex] || (isActiveRow ? input[colIndex] || "" : "");
                       const status = row?.result?.[colIndex];
                       return (
                         <div key={colIndex} className={cellClass(status)}>
