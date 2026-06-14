@@ -44,7 +44,33 @@ function parseAllowedOrigins(value) {
   return normalized.length > 0 ? normalized : "*";
 }
 
-app.use(cors({ origin: parseAllowedOrigins(CLIENT_ORIGIN) }));
+function isAllowedOrigin(origin, allowedOrigins) {
+  if (!origin) return true;
+  if (allowedOrigins === "*") return true;
+  if (allowedOrigins.includes(origin)) return true;
+
+  const isVercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+  if (isVercelPreview) {
+    return true;
+  }
+
+  return false;
+}
+
+const allowedOrigins = parseAllowedOrigins(CLIENT_ORIGIN);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin, allowedOrigins)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("origin_not_allowed"));
+    }
+  })
+);
 app.use(express.json());
 
 const rooms = new Map();
