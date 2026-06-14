@@ -31,16 +31,20 @@ export default function App() {
   const [nameDraft, setNameDraft] = useState(getName());
   const [input, setInput] = useState("");
   const [chat, setChat] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
+  const [chatError, setChatError] = useState("");
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
   const [joined, setJoined] = useState(false);
   const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
 
   const roomState = state?.round;
   const meAttempts = roomState?.attemptsByPlayer?.[you.playerId] || [];
   const otherPlayer = state?.players?.find((p) => p.id !== you.playerId);
   const canPlay = !!socketRef.current && roomState && !roomState.finishedAt;
+  const roundTarget = roomState?.target;
 
   const boardRows = useMemo(() => {
     const rows = [...meAttempts];
@@ -88,7 +92,6 @@ export default function App() {
       if (event.key === "Enter") {
         if (input.length === 5) {
           send("guess", { value: input.trim().toLowerCase() });
-          setInput("");
         }
         return;
       }
@@ -104,6 +107,10 @@ export default function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canPlay, input, joined]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [state?.messages?.length]);
 
   function connect() {
     socketRef.current?.close();
@@ -126,6 +133,15 @@ export default function App() {
       }
       if (data.type === "guess_result") {
         if (!data.ok) setStatus(data.error);
+        if (!data.ok && data.error === "not_a_real_word") {
+          setChatError("That is not a real 5-letter word.");
+        }
+        if (!data.ok && data.error === "guess_must_be_5_letters") {
+          setChatError("Enter exactly 5 letters.");
+        }
+        if (data.ok) {
+          setChatError("");
+        }
       }
     };
   }
@@ -140,14 +156,17 @@ export default function App() {
     e.preventDefault();
     if (input.length === 5) {
       send("guess", { value: input.trim().toLowerCase() });
-      setInput("");
     }
   }
 
   function onSubmitChat(e) {
     e.preventDefault();
-    send("chat", { text: chat, name });
+    const text = chat.trim();
+    if (!text) return;
+    send("chat", { text, name, replyTo: replyTo?.id || null });
     setChat("");
+    setReplyTo(null);
+    setChatError("");
   }
 
   function enterRoom() {
@@ -159,6 +178,21 @@ export default function App() {
     setNameDraft(trimmedName);
     setStoredName(trimmedName);
     setJoined(true);
+  }
+
+  function handleGuessInput(char) {
+    setInput((value) => (value.length < 5 ? `${value}${char}` : value));
+    setChatError("");
+  }
+
+  function submitKeyboardGuess() {
+    if (input.length === 5) {
+      send("guess", { value: input.trim().toLowerCase() });
+    }
+  }
+
+  function reactToMessage(messageId, emoji) {
+    send("reaction", { messageId, emoji });
   }
 
   return (
@@ -202,6 +236,16 @@ export default function App() {
           <>
         <section className="board-pane">
           <div className="board-shell">
+            {roomState?.finishedAt ? (
+              <div className="outcome-banner">
+                <div className="outcome-title">
+                  {roomState.winner === you.playerId ? "You won" : "Round ended"}
+                </div>
+                <div className="outcome-text">
+                  Answer: <strong>{roundTarget?.toUpperCase()}</strong>
+                </div>
+              </div>
+            ) : null}
             <div className="grid">
               {boardRows.map((row, rowIndex) => {
                 const isActiveRow = !row && rowIndex === meAttempts.length && !roomState?.finishedAt;
@@ -233,7 +277,7 @@ export default function App() {
                       key={key}
                       type="button"
                       className={`key ${keyboardState[key] || ""}`}
-                      onClick={() => setInput((value) => (value.length < 5 ? `${value}${key.toLowerCase()}` : value))}
+                      onClick={() => handleGuessInput(key.toLowerCase())}
                       disabled={!canPlay}
                     >
                       {key}
@@ -249,12 +293,21 @@ export default function App() {
             </div>
 
             <form className="guess-form" onSubmit={onSubmitGuess}>
+              <div className="current-guess">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="guess-slot">
+                    {input[index]?.toUpperCase() || ""}
+                  </div>
+                ))}
+              </div>
               <button type="submit" className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
             </form>
 
+            {chatError ? <div className="error-banner">{chatError}</div> : null}
+
             <div className="footer-row">
               {roomState?.finishedAt ? (
-                <button onClick={() => send("next_round", {})}>New round</button>
+                <button type="button" onClick={() => send("next_round", {})}>New round</button>
               ) : null}
             </div>
           </div>
@@ -271,13 +324,40 @@ export default function App() {
               {(state?.messages || []).map((message) => (
                 <div key={message.id} className={`message ${message.playerId === you.playerId ? "mine" : ""}`}>
                   <div className="bubble">
+                    {message.replyTo ? (
+                      <div className="reply-pill">
+                        Replying to {message.replyTo.name}: {message.replyTo.text}
+                      </div>
+                    ) : null}
                     <div className="sender">{message.name}</div>
                     <div>{message.text}</div>
+                    <div className="reactions">
+                      {["❤️", "😂", "👍", "🔥"].map((emoji) => (
+                        <button key={emoji} type="button" className="reaction-btn" onClick={() => reactToMessage(message.id, emoji)}>
+                          {emoji}
+                          {Object.values(message.reactions || {}).filter((value) => value === emoji).length > 0 ? <span>{Object.values(message.reactions || {}).filter((value) => value === emoji).length}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="reply-btn"
+                      onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
+                    >
+                      Reply
+                    </button>
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
             <form className="chat-form" onSubmit={onSubmitChat}>
+              {replyTo ? (
+                <div className="reply-composer">
+                  Replying to {replyTo.name}: {replyTo.text}
+                  <button type="button" onClick={() => setReplyTo(null)}>x</button>
+                </div>
+              ) : null}
               <input
                 value={chat}
                 onChange={(e) => setChat(e.target.value)}

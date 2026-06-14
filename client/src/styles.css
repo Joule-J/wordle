@@ -1,18 +1,19 @@
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  --bg: #151515;
-  --panel: #191919;
-  --panel-soft: #202020;
-  --panel-soft-2: #2a2a2a;
-  --line: rgba(255, 255, 255, 0.14);
-  --line-strong: rgba(255, 255, 255, 0.28);
-  --text: #f5f5f5;
-  --muted: #a3a3a3;
-  --good: #6aaa64;
-  --mid: #c9b458;
-  --bad: #3a3a3c;
-  --key: #9b9b9b;
+  --bg: #fffaf1;
+  --panel: #fff7e8;
+  --panel-soft: #f3e3bd;
+  --panel-soft-2: #f0d28b;
+  --line: rgba(70, 42, 18, 0.14);
+  --line-strong: rgba(70, 42, 18, 0.24);
+  --text: #2f2418;
+  --muted: #8d775e;
+  --good: #a5cf83;
+  --mid: #f0e76f;
+  --bad: #e89951;
+  --key: #ecb65f;
+  --warn: #c74f34;
 }
 
 * { box-sizing: border-box; }
@@ -25,7 +26,7 @@ html, body, #root {
 
 body {
   min-height: 100vh;
-  background: var(--bg);
+  background: linear-gradient(180deg, #fffdf8 0%, var(--bg) 100%);
   color: var(--text);
 }
 
@@ -67,7 +68,8 @@ input:focus {
   justify-content: space-between;
   padding: 0 28px;
   border-bottom: 1px solid var(--line);
-  background: rgba(18, 18, 18, 0.98);
+  background: rgba(255, 250, 241, 0.96);
+  backdrop-filter: blur(10px);
 }
 
 .topbar-left,
@@ -105,7 +107,7 @@ input:focus {
   border-radius: 999px;
   padding: 0.72rem 1.1rem;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.55);
   min-width: 112px;
   text-align: center;
 }
@@ -132,7 +134,7 @@ input:focus {
 .landing-card {
   width: min(760px, 100%);
   border: 1px solid var(--line);
-  background: #111111;
+  background: #fff9ee;
   border-radius: 28px;
   padding: 28px;
   display: grid;
@@ -241,7 +243,7 @@ input:focus {
   padding: 0.82rem 1.05rem;
   border-radius: 999px;
   background: var(--key);
-  color: white;
+  color: #2f2418;
   font-weight: 700;
 }
 
@@ -267,7 +269,7 @@ input:focus {
   padding: 0 10px;
   border-radius: 8px;
   background: var(--key);
-  color: white;
+  color: #2f2418;
   font-weight: 700;
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12);
 }
@@ -281,7 +283,7 @@ input:focus {
 }
 
 .key.absent {
-  background: #4a4a4a;
+  background: #616161;
 }
 
 .key.wide {
@@ -319,7 +321,7 @@ input:focus {
 
 .chat-pane {
   border-left: 1px solid var(--line);
-  background: #111111;
+  background: #fff7eb;
   min-height: 0;
   overflow: hidden;
 }
@@ -369,12 +371,12 @@ input:focus {
   max-width: 82%;
   padding: 12px 14px;
   border-radius: 18px;
-  background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: #fffdf8;
+  border: 1px solid rgba(70, 42, 18, 0.08);
 }
 
 .message.mine .bubble {
-  background: #2a2f3d;
+  background: #fff1d8;
 }
 
 .sender {
@@ -397,12 +399,97 @@ input:focus {
 
 .chat-form input {
   border-radius: 14px;
+  background: #fffdf8;
 }
 
 .hidden-input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
+}
+
+.outcome-banner,
+.error-banner,
+.reply-composer,
+.reply-pill {
+  border-radius: 16px;
+  padding: 10px 12px;
+}
+
+.outcome-banner {
+  width: 100%;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+}
+
+.outcome-title {
+  font-weight: 800;
+}
+
+.outcome-text {
+  margin-top: 4px;
+}
+
+.error-banner {
+  background: #ffe1dc;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  width: 100%;
+}
+
+.reply-composer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  background: #fff1d8;
+  border: 1px solid var(--line);
+}
+
+.reply-btn,
+.reaction-btn {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--muted);
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reaction-btn span {
+  margin-left: 6px;
+  color: var(--text);
+}
+
+.reply-pill {
+  background: #fff4dc;
+  border: 1px solid var(--line);
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.current-guess {
+  display: grid;
+  grid-template-columns: repeat(5, 48px);
+  gap: 8px;
+  margin-right: 10px;
+}
+
+.guess-slot {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--line-strong);
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
 }
 
 @media (max-width: 1100px) {

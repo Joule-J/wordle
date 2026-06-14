@@ -22,8 +22,10 @@ export const WORDS = [
 ];
 
 const DATAMUSE_URL = "https://api.datamuse.com/words?sp=?????&max=1000";
+const DATAMUSE_VALIDATE_URL = (word) => `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&max=1`;
 let cachedApiWords = [];
 let cachedAt = 0;
+const validWordCache = new Map();
 
 export async function pickWord() {
   const apiWords = await loadWordsFromApi();
@@ -56,4 +58,28 @@ async function loadWordsFromApi() {
 
 export function isValidGuess(word) {
   return typeof word === "string" && /^[a-z]{5}$/.test(word.toLowerCase());
+}
+
+export async function isRealWord(word) {
+  const normalized = String(word ?? "").toLowerCase();
+  if (!/^[a-z]{5}$/.test(normalized)) {
+    return false;
+  }
+  if (validWordCache.has(normalized)) {
+    return validWordCache.get(normalized);
+  }
+  try {
+    const response = await fetch(DATAMUSE_VALIDATE_URL(normalized));
+    if (!response.ok) {
+      validWordCache.set(normalized, false);
+      return false;
+    }
+    const data = await response.json();
+    const ok = Array.isArray(data) && data.some((item) => item?.word === normalized);
+    validWordCache.set(normalized, ok);
+    return ok;
+  } catch {
+    validWordCache.set(normalized, false);
+    return false;
+  }
 }

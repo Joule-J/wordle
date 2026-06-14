@@ -2,7 +2,7 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { WebSocketServer } from "ws";
-import { addMessage, createRoom, guess, joinRoom, nextRound, roomSnapshot } from "./game.js";
+import { addMessage, createRoom, guess, joinRoom, nextRound, replyToMessage, roomSnapshot, toggleReaction } from "./game.js";
 
 const PORT = process.env.PORT || 3001;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "*";
@@ -82,8 +82,16 @@ wss.on("connection", async (ws, req) => {
     }
 
     if (data.type === "guess") {
-      const result = guess(currentRoom, playerId, data.value);
+      const result = await guess(currentRoom, playerId, data.value);
       if (result.ok) {
+        if (result.roundEnded) {
+          setTimeout(async () => {
+            const activeRoom = rooms.get(roomId);
+            if (!activeRoom || activeRoom !== currentRoom) return;
+            await nextRound(currentRoom);
+            broadcast(roomId);
+          }, 1200);
+        }
         broadcast(roomId);
       }
       ws.send(JSON.stringify({ type: "guess_result", ...result }));
@@ -91,7 +99,17 @@ wss.on("connection", async (ws, req) => {
     }
 
     if (data.type === "chat") {
-      const message = addMessage(currentRoom, playerId, data.name || name, data.text);
+      const message = data.replyTo
+        ? replyToMessage(currentRoom, data.replyTo, playerId, data.name || name, data.text)
+        : addMessage(currentRoom, playerId, data.name || name, data.text);
+      if (message) {
+        broadcast(roomId);
+      }
+      return;
+    }
+
+    if (data.type === "reaction") {
+      const message = toggleReaction(currentRoom, data.messageId, playerId, data.emoji);
       if (message) {
         broadcast(roomId);
       }
