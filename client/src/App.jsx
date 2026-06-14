@@ -41,6 +41,12 @@ function roomErrorMessage(code) {
   return "Could not connect to room.";
 }
 
+function replyPreviewText(text, limit = 72) {
+  const value = String(text ?? "").trim();
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit - 1)}…`;
+}
+
 export default function App() {
   const [roomCode, setRoomCode] = useState("");
   const [roomCodeDraft, setRoomCodeDraft] = useState("");
@@ -561,55 +567,65 @@ export default function App() {
                       onMouseLeave={() => setActiveEmojiMessageId(null)}
                     >
                       <div className="message-stack">
-                        {message.replyTo ? (
-                          <div className="reply-pill">
-                            Replying to: {message.replyTo.text}
+                        <div className="bubble-row">
+                          <div className="bubble">
+                            {message.replyTo ? (
+                              <div className="reply-pill">
+                                <span className="reply-author">{message.replyTo.name}</span>
+                                <span>{replyPreviewText(message.replyTo.text, 54)}</span>
+                              </div>
+                            ) : null}
+                            <div>{message.text}</div>
+                            {Object.entries(message.reactions || {}).length > 0 ? (
+                              <div className="reaction-row is-attached">
+                                <div className="reaction-stack">
+                                  {Object.entries(
+                                    Object.values(message.reactions || {}).reduce((acc, value) => {
+                                      acc[value] = (acc[value] || 0) + 1;
+                                      return acc;
+                                    }, {})
+                                  ).map(([emoji, count]) => (
+                                    <span key={emoji} className="reaction-count">
+                                      {emoji} {count}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
-                        <div className="bubble">
                           <div className="bubble-actions">
                             <button
                               type="button"
                               className="bubble-action"
+                              aria-label="Reply to message"
                               onClick={() => setReplyTo({ id: message.id, name: message.name, text: message.text })}
                             >
                               ↩
                             </button>
-                            <button type="button" className="bubble-action" onClick={() => openEmojiBar(message.id)}>
+                            <button
+                              type="button"
+                              className="bubble-action"
+                              aria-label="Add reaction"
+                              onClick={() => openEmojiBar(message.id)}
+                            >
                               ☺
                             </button>
+                            {activeEmojiMessageId === message.id ? (
+                              <div className="floating-reactions">
+                                {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    className="reaction-chip"
+                                    onClick={() => reactToMessage(message.id, emoji)}
+                                    aria-label={`React with ${emoji}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                          <div>{message.text}</div>
-                        </div>
-                        {activeEmojiMessageId === message.id ? (
-                          <div className="floating-reactions">
-                            {["❤️", "🤔", "😂", "🥲", "😘", "➕"].map((emoji) => (
-                              <button
-                                key={emoji}
-                                type="button"
-                                className="reaction-chip"
-                                onClick={() => reactToMessage(message.id, emoji)}
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="reaction-row">
-                          {Object.entries(message.reactions || {}).length > 0 ? (
-                            <div className="reaction-stack">
-                              {Object.entries(
-                                Object.values(message.reactions || {}).reduce((acc, value) => {
-                                  acc[value] = (acc[value] || 0) + 1;
-                                  return acc;
-                                }, {})
-                              ).map(([emoji, count]) => (
-                                <span key={emoji} className="reaction-count">
-                                  {emoji} {count}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -617,44 +633,50 @@ export default function App() {
                   <div ref={messagesEndRef} />
                 </div>
                 <form className="chat-form" onSubmit={onSubmitChat}>
-                  <div className="emoji-wrap">
-                    <button
-                      type="button"
-                      className={`emoji-shortcut ${composerEmojiOpen ? "is-open" : ""}`}
-                      onClick={toggleComposerEmojiPanel}
-                    >
-                      ☺
-                    </button>
-                    {composerEmojiOpen ? (
-                      <div className="composer-emoji-panel">
-                        {["🙂", "😂", "🔥", "❤️", "👍", "🎉", "👀", "😮"].map((emoji) => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            className="composer-emoji-chip"
-                            onClick={() => pickComposerEmoji(emoji)}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
                   {replyTo ? (
                     <div className="reply-composer">
-                      Replying to {replyTo.name}: {replyTo.text}
-                      <button type="button" onClick={() => setReplyTo(null)}>
-                        x
+                      <div className="reply-composer-bubble">
+                        <div className="reply-composer-label">Replying to {replyTo.name}</div>
+                        <div>{replyPreviewText(replyTo.text)}</div>
+                      </div>
+                      <button type="button" className="reply-dismiss" aria-label="Cancel reply" onClick={() => setReplyTo(null)}>
+                        ×
                       </button>
                     </div>
                   ) : null}
-                  <input
-                    value={chat}
-                    onChange={(e) => setChat(e.target.value)}
-                    placeholder="Message..."
-                    maxLength={240}
-                  />
-                  <button type="submit">Send</button>
+                  <div className="chat-input-row">
+                    <div className="emoji-wrap">
+                      <button
+                        type="button"
+                        className={`emoji-shortcut ${composerEmojiOpen ? "is-open" : ""}`}
+                        onClick={toggleComposerEmojiPanel}
+                        aria-label="Open emoji picker"
+                      >
+                        ☺
+                      </button>
+                      {composerEmojiOpen ? (
+                        <div className="composer-emoji-panel">
+                          {["🙂", "😂", "🔥", "❤️", "👍", "🎉", "👀", "😮"].map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              className="composer-emoji-chip"
+                              onClick={() => pickComposerEmoji(emoji)}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <input
+                      value={chat}
+                      onChange={(e) => setChat(e.target.value)}
+                      placeholder="Message..."
+                      maxLength={240}
+                    />
+                    <button type="submit">Send</button>
+                  </div>
                 </form>
               </div>
             </aside>
