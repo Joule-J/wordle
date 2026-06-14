@@ -463,15 +463,19 @@ export default function App() {
                   ) : null}
                 </div>
 
-                {boardNotice ? (
-                  <div className={`board-notice ${boardNoticeKind === "error" ? "is-error" : ""}`}>
-                    {boardNotice}
-                  </div>
-                ) : null}
-
-                {roundTarget && roundState?.finishedAt ? (
-                  <div className="board-notice is-answer">
-                    Doğru cevap: <strong>{roundTarget.toUpperCase()}</strong>
+                {boardNotice || (roundTarget && roundState?.finishedAt) ? (
+                  <div className="board-overlay" aria-live="polite" aria-atomic="true">
+                    <div
+                      className={`board-notice ${boardNoticeKind === "error" ? "is-error" : ""} ${
+                        roundTarget && roundState?.finishedAt ? "is-answer" : ""
+                      }`}
+                    >
+                      {boardNotice || (
+                        <>
+                          Doğru cevap: <strong>{roundTarget.toUpperCase()}</strong>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
