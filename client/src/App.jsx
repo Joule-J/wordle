@@ -48,6 +48,21 @@ export default function App() {
     return rows;
   }, [meAttempts]);
 
+  const keyboardState = useMemo(() => {
+    const order = { correct: 3, present: 2, absent: 1 };
+    const map = {};
+    for (const attempt of meAttempts) {
+      attempt.result.forEach((result, index) => {
+        const letter = attempt.guess[index]?.toUpperCase();
+        if (!letter) return;
+        if ((order[result] || 0) > (order[map[letter]] || 0)) {
+          map[letter] = result;
+        }
+      });
+    }
+    return map;
+  }, [meAttempts]);
+
   useEffect(() => {
     if (joined) {
       connect();
@@ -55,6 +70,30 @@ export default function App() {
     return () => socketRef.current?.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, joined]);
+
+  useEffect(() => {
+    if (!joined) return;
+    function onKeyDown(event) {
+      if (!canPlay) return;
+      if (event.key === "Enter") {
+        if (input.length === 5) {
+          send("guess", { value: input.trim().toLowerCase() });
+          setInput("");
+        }
+        return;
+      }
+      if (event.key === "Backspace") {
+        setInput((value) => value.slice(0, -1));
+        return;
+      }
+      if (/^[a-zA-Z]$/.test(event.key)) {
+        setInput((value) => (value.length < 5 ? `${value}${event.key.toLowerCase()}` : value));
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canPlay, input, joined]);
 
   function connect() {
     socketRef.current?.close();
@@ -99,23 +138,14 @@ export default function App() {
     setChat("");
   }
 
-  function applyName() {
-    const trimmed = nameDraft.trim().slice(0, 24) || "Player";
-    setName(trimmed);
-    setNameDraft(trimmed);
-    setStoredName(trimmed);
-    send("join", { name: trimmed });
-  }
-
-  function applyRoom() {
+  function enterRoom() {
     const nextRoom = roomDraft.trim() || "demo";
+    const trimmedName = nameDraft.trim().slice(0, 24) || "Player";
     setRoomId(nextRoom);
     setRoomDraft(nextRoom);
-  }
-
-  function enterRoom() {
-    applyRoom();
-    applyName();
+    setName(trimmedName);
+    setNameDraft(trimmedName);
+    setStoredName(trimmedName);
     setJoined(true);
   }
 
@@ -161,31 +191,23 @@ export default function App() {
         <section className="board-pane">
           <div className="board-shell">
             <div className="grid">
-              {boardRows.map((row, rowIndex) => (
-                <div key={rowIndex} className="row">
-                  {Array.from({ length: 5 }).map((_, colIndex) => {
-                    const letter = row?.guess?.[colIndex] || "";
-                    const status = row?.result?.[colIndex];
-                    return (
-                      <div key={colIndex} className={cellClass(status)}>
-                        {letter}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              {boardRows.map((row, rowIndex) => {
+                const currentGuess = row ? row.guess : input;
+                return (
+                  <div key={rowIndex} className="row">
+                    {Array.from({ length: 5 }).map((_, colIndex) => {
+                      const letter = currentGuess?.[colIndex] || "";
+                      const status = row?.result?.[colIndex];
+                      return (
+                        <div key={colIndex} className={cellClass(status)}>
+                          {letter}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
-
-            <form className="guess-form" onSubmit={onSubmitGuess}>
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value.slice(0, 5))}
-                placeholder="guess 5 letters"
-                maxLength={5}
-                disabled={!canPlay}
-              />
-              <button disabled={!canPlay}>Enter</button>
-            </form>
 
             <div className="keyboard">
               {[
@@ -198,7 +220,7 @@ export default function App() {
                     <button
                       key={key}
                       type="button"
-                      className="key"
+                      className={`key ${keyboardState[key] || ""}`}
                       onClick={() => setInput((value) => (value.length < 5 ? `${value}${key.toLowerCase()}` : value))}
                       disabled={!canPlay}
                     >
@@ -214,14 +236,11 @@ export default function App() {
               ))}
             </div>
 
+            <form className="guess-form" onSubmit={onSubmitGuess}>
+              <button className="guess-submit" disabled={!canPlay || input.length !== 5}>Enter</button>
+            </form>
+
             <div className="footer-row">
-              <div className="hint">
-                {roomState?.finishedAt
-                  ? roomState?.winner === you.playerId
-                    ? "You won this round."
-                    : "Round ended."
-                  : "Green = correct, yellow = present, gray = absent."}
-              </div>
               {roomState?.finishedAt ? (
                 <button onClick={() => send("next_round", {})}>New round</button>
               ) : null}
