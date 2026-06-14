@@ -72,6 +72,9 @@ export default function App() {
   const roundTarget = roundState?.target;
   const roomLabel = state?.roomId || roomCode || "—";
   const roundLabel = matchState ? `${matchState.currentRoundNumber}/${matchState.totalRounds}` : "—";
+  const playerNames = (state?.players || []).map((player) => player.name).filter(Boolean);
+  const playerLabel =
+    playerNames.length > 0 ? `Player: ${playerNames.join(" | ")}` : `Player: ${otherPlayer?.name || "Waiting"}`;
 
   const boardRows = useMemo(() => {
     const rows = [...meAttempts];
@@ -445,22 +448,9 @@ export default function App() {
             <section className="board-pane">
               <div className="board-shell">
                 <div className="room-stats">
-                  <div className="stat-pill">
-                    <span>Room</span>
-                    <strong>{roomLabel}</strong>
-                  </div>
-                  <div className="stat-pill">
-                    <span>Round</span>
-                    <strong>{roundLabel}</strong>
-                  </div>
-                  <div className="stat-pill">
-                    <span>Status</span>
-                    <strong>{status}</strong>
-                  </div>
-                  <div className="stat-pill">
-                    <span>Player</span>
-                    <strong>{otherPlayer?.name || "Waiting"}</strong>
-                  </div>
+                  <span>Room: {roomLabel}</span>
+                  <span>Round: {roundLabel}</span>
+                  <span>{playerLabel}</span>
                 </div>
 
                 {boardNotice || (roundTarget && roundState?.finishedAt) ? (

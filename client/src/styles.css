@@ -65,7 +65,7 @@ input:focus {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.45fr);
   min-height: 0;
   overflow: hidden;
   align-items: stretch;
@@ -167,18 +167,16 @@ input:focus {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   min-height: 0;
   max-height: 100%;
   overflow: hidden;
   position: relative;
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: 30px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
-    #1d1d1d;
-  box-shadow: 0 26px 60px rgba(0,0,0,0.28);
+  padding: 4px 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .board-overlay {
@@ -194,31 +192,14 @@ input:focus {
 
 .room-stats {
   width: 100%;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.stat-pill {
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 20px;
-  padding: 12px 14px;
-  display: grid;
-  gap: 4px;
-  min-height: 74px;
-}
-
-.stat-pill span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
   color: var(--muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.stat-pill strong {
-  font-size: 1rem;
-  font-weight: 800;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  padding: 6px 2px 0;
 }
 
 .match-line {
@@ -227,7 +208,7 @@ input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 2px 2px 0;
+  padding: 0 2px;
 }
 
 .match-copy {
@@ -412,14 +393,14 @@ input:focus {
 
 .chat-pane {
   border-left: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
-    #1f1f1f;
+  background: transparent;
   min-height: 0;
   overflow: hidden;
-  border-radius: 30px;
-  border: 1px solid var(--line);
-  box-shadow: 0 26px 60px rgba(0,0,0,0.24);
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  max-width: 340px;
+  justify-self: end;
 }
 
 .chat-shell {
@@ -428,7 +409,7 @@ input:focus {
   grid-template-rows: minmax(0, 1fr) auto;
   gap: 14px;
   min-height: 0;
-  padding: 18px;
+  padding: 8px 0 0 16px;
 }
 
 .messages {
@@ -454,7 +435,7 @@ input:focus {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: 82%;
+  max-width: 74%;
 }
 
 .message.mine .message-stack {
@@ -721,9 +702,11 @@ input:focus {
   }
 
   .chat-pane {
-    border-left: 1px solid var(--line);
+    border-left: 0;
     min-height: 360px;
     overflow: visible;
+    max-width: none;
+    justify-self: stretch;
   }
 
   .landing-card {
@@ -748,15 +731,11 @@ input:focus {
 
   .board-shell,
   .chat-pane {
-    border-radius: 24px;
+    border-radius: 0;
   }
 
   .board-shell {
-    padding: 16px;
-  }
-
-  .room-stats {
-    grid-template-columns: 1fr 1fr;
+    padding: 4px 2px 0;
   }
 
   .landing-actions {
