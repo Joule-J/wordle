@@ -453,8 +453,9 @@ input:focus {
 .message-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   max-width: 82%;
+  position: relative;
 }
 
 .message.mine .message-stack {
@@ -475,31 +476,42 @@ input:focus {
   background: #2a2f3d;
 }
 
-.bubble-actions {
-  position: absolute;
-  top: -12px;
-  right: 12px;
+.message-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 100%;
+  padding: 0 8px;
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(2px);
   transition: opacity 0.15s ease, transform 0.15s ease;
   pointer-events: none;
 }
 
-.message:hover .bubble-actions {
+.message:hover .message-actions {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
 }
 
-.bubble-action {
+.message-action {
   width: 34px;
   height: 34px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
+  display: grid;
+  place-items: center;
+}
+
+.message-action.left {
+  justify-self: start;
+}
+
+.message-action.right {
+  justify-self: end;
 }
 
 .chat-form,
@@ -642,12 +654,34 @@ input:focus {
 }
 
 .reply-composer {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
+  display: grid;
+  gap: 4px;
   background: var(--panel-soft);
   border: 1px solid var(--line);
+  min-width: 170px;
+}
+
+.reply-composer-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.reply-composer-text {
+  color: var(--text);
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+.reply-composer-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  justify-self: end;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 
 .reply-btn,
@@ -678,6 +712,15 @@ input:focus {
   font-size: 0.85rem;
   width: fit-content;
   max-width: 100%;
+}
+
+.reply-pill {
+  padding: 8px 10px;
+  color: var(--muted);
+}
+
+.reply-pill::before {
+  content: "";
 }
 
 @keyframes cell-flash {
