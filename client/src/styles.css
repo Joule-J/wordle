@@ -788,7 +788,8 @@ input:focus {
   display: grid;
   gap: 2px;
   align-content: start;
-  padding: 4px 14px 12px;
+  /* Reduce horizontal padding so bubbles sit closer to the walls */
+  padding: 4px 6px 12px;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
   scrollbar-width: thin;
@@ -826,14 +827,16 @@ input:focus {
   justify-self: end;
   justify-items: end;
   margin-left: auto;
-  margin-right: 0;
+  /* keep mine messages close to the right wall */
+  margin-right: 6px;
 }
 
 .message-stack:not(.mine) {
   justify-self: start;
   justify-items: start;
   margin-right: auto;
-  margin-left: 0;
+  /* push incoming (left) messages slightly away from the left wall */
+  margin-left: 18px;
 }
 
 .message-row {
