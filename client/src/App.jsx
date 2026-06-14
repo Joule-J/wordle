@@ -53,6 +53,7 @@ export default function App() {
   const [roomError, setRoomError] = useState("");
   const [boardNotice, setBoardNotice] = useState("");
   const [boardNoticeKind, setBoardNoticeKind] = useState("info");
+  const [guessFlashToken, setGuessFlashToken] = useState(0);
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
@@ -146,6 +147,14 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [boardNotice]);
 
+  useEffect(() => {
+    if (!guessFlashToken) return undefined;
+    const timer = window.setTimeout(() => {
+      setGuessFlashToken(0);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [guessFlashToken]);
+
   function connectToRoom(nextRoomCode, nextName) {
     socketRef.current?.close();
 
@@ -204,12 +213,10 @@ export default function App() {
       if (data.type === "guess_result") {
         if (!data.ok) setStatus(data.error);
         if (!data.ok && data.error === "not_a_real_word") {
-          setBoardNotice("Bu bir kelime değil.");
-          setBoardNoticeKind("error");
+          setGuessFlashToken(Date.now());
         }
         if (!data.ok && data.error === "guess_must_be_5_letters") {
-          setBoardNotice("5 harf gir.");
-          setBoardNoticeKind("error");
+          setGuessFlashToken(Date.now());
         }
         if (!data.ok && data.error === "attempt_limit") {
           setBoardNotice("Deneme hakkı bitti.");
@@ -482,13 +489,17 @@ export default function App() {
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {
                     const isActiveRow = !row && rowIndex === meAttempts.length && !roundState?.finishedAt;
+                    const isFlashRow = isActiveRow && !!guessFlashToken;
                     return (
-                      <div key={rowIndex} className="row">
+                      <div key={rowIndex} className={`row ${isFlashRow ? "is-flash" : ""}`}>
                         {Array.from({ length: 5 }).map((_, colIndex) => {
                           const letter = row?.guess?.[colIndex] || (isActiveRow ? input[colIndex] || "" : "");
                           const status = row?.result?.[colIndex];
                           return (
-                            <div key={colIndex} className={cellClass(status)}>
+                            <div
+                              key={colIndex}
+                              className={`${cellClass(status)} ${isFlashRow ? "flash-error" : ""}`}
+                            >
                               {letter}
                             </div>
                           );

@@ -313,6 +313,10 @@ input:focus {
   width: fit-content;
 }
 
+.row.is-flash {
+  animation: row-shake 0.28s ease-in-out;
+}
+
 .cell {
   width: var(--tile-size);
   aspect-ratio: 1;
@@ -338,6 +342,13 @@ input:focus {
 .cell.absent {
   background: var(--bad);
   border-color: var(--bad);
+}
+
+.cell.flash-error {
+  background: #dc2626;
+  border-color: #ef4444;
+  color: white;
+  animation: cell-flash 0.7s ease;
 }
 
 .guess-form {
@@ -671,6 +682,39 @@ input:focus {
   font-size: 0.85rem;
   width: fit-content;
   max-width: 100%;
+}
+
+@keyframes cell-flash {
+  0%,
+  100% {
+    background: #dc2626;
+    border-color: #ef4444;
+    color: white;
+  }
+  50% {
+    background: #7f1d1d;
+    border-color: #b91c1c;
+    color: white;
+  }
+}
+
+@keyframes row-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
 }
 
 @media (max-width: 1100px) {
