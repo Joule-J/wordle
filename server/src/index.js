@@ -13,6 +13,7 @@ import {
   replyToMessage,
   roomSnapshot,
   scheduleNextRound,
+  setPlayerDraft,
   toggleReaction
 } from "./game.js";
 
@@ -185,6 +186,13 @@ wss.on("connection", async (ws, req) => {
       return;
     }
 
+    if (data.type === "guess_draft") {
+      if (setPlayerDraft(currentRoom, playerId, data.value)) {
+        broadcast(roomId);
+      }
+      return;
+    }
+
     if (data.type === "chat") {
       const message = data.replyTo
         ? replyToMessage(currentRoom, data.replyTo, playerId, data.name || name, data.text)
@@ -227,6 +235,9 @@ wss.on("connection", async (ws, req) => {
   ws.on("close", () => {
     const currentRoom = rooms.get(roomId);
     if (!currentRoom) return;
+    if (currentRoom.round?.draftsByPlayer) {
+      delete currentRoom.round.draftsByPlayer[playerId];
+    }
     currentRoom.players = currentRoom.players.filter((p) => p.id !== playerId);
     broadcast(roomId);
   });

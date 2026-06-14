@@ -43,6 +43,7 @@ async function createRound(roundNumber) {
     finishedAt: null,
     winner: null,
     attemptsByPlayer: {},
+    draftsByPlayer: {},
     revealed: false
   };
 }
@@ -112,7 +113,8 @@ export function roomSnapshot(room) {
       winner: room.round.winner,
       revealed: room.round.revealed,
       target: room.round.revealed ? room.round.target : null,
-      attemptsByPlayer: room.round.attemptsByPlayer
+      attemptsByPlayer: room.round.attemptsByPlayer,
+      draftsByPlayer: room.round.draftsByPlayer
     }
   };
 }
@@ -156,6 +158,7 @@ export async function guess(room, playerId, value) {
     at: Date.now()
   };
   room.round.attemptsByPlayer[playerId] = [...playerGuesses, entry];
+  room.round.draftsByPlayer[playerId] = "";
 
   if (guessWord === room.round.target) {
     const progress = finishRound(room, playerId, true);
@@ -193,6 +196,20 @@ export async function nextRound(room) {
 export async function playAgain(room) {
   await resetMatch(room);
   return { ok: true };
+}
+
+export function setPlayerDraft(room, playerId, value) {
+  if (!room?.round || room.round.finishedAt) {
+    return false;
+  }
+
+  const draft = String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .slice(0, 5);
+
+  room.round.draftsByPlayer[playerId] = draft;
+  return true;
 }
 
 export function scheduleNextRound(room, broadcast) {

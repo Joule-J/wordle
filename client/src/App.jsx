@@ -1,8 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import EmojiPicker, { Categories, Theme } from "emoji-picker-react";
+import cherryBlossom from "./assets/flowers/cherry-blossom.png";
+import sakura from "./assets/flowers/sakura.png";
+import tulips from "./assets/flowers/tulips.png";
+import tulipSingle from "./assets/flowers/tulip-single.png";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE ||
   (import.meta.env.DEV ? "http://localhost:3001" : "https://wordle-9iz0.onrender.com");
+
+const EMOJI_CATEGORIES = [
+  Categories.SMILEYS_PEOPLE,
+  Categories.ANIMALS_NATURE,
+  Categories.FOOD_DRINK,
+  Categories.TRAVEL_PLACES,
+  Categories.ACTIVITIES,
+  Categories.OBJECTS,
+  Categories.SYMBOLS,
+  Categories.FLAGS,
+];
 
 function getId() {
   return (
@@ -32,6 +48,20 @@ function normalizeRoomCode(value) {
 
 function cellClass(status) {
   return `cell ${status || ""}`;
+}
+
+function buildBoardRows(attempts, draft = "", roundFinished = false) {
+  const rows = [...attempts];
+  while (rows.length < 6) rows.push(null);
+
+  if (!roundFinished) {
+    const activeIndex = attempts.length;
+    if (activeIndex < 6 && !rows[activeIndex]) {
+      rows[activeIndex] = { guess: draft, isDraft: true };
+    }
+  }
+
+  return rows;
 }
 
 function roomErrorMessage(code) {
@@ -80,6 +110,7 @@ export default function App() {
   const [boardNoticeKind, setBoardNoticeKind] = useState("info");
   const [guessFlashToken, setGuessFlashToken] = useState(0);
   const [composerEmojiOpen, setComposerEmojiOpen] = useState(false);
+  const [composerEmojiPickerOpen, setComposerEmojiPickerOpen] = useState(false);
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("Disconnected");
   const [you, setYou] = useState({ playerId: getId(), name: getName() });
@@ -88,11 +119,15 @@ export default function App() {
   const [activeEmojiMessageId, setActiveEmojiMessageId] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const chatPaneRef = useRef(null);
+  const chatInputRef = useRef(null);
 
   const roundState = state?.round;
   const matchState = state?.match;
   const meAttempts = roundState?.attemptsByPlayer?.[you.playerId] || [];
   const otherPlayer = state?.players?.find((p) => p.id !== you.playerId);
+  const otherAttempts = roundState?.attemptsByPlayer?.[otherPlayer?.id] || [];
+  const otherDraft = roundState?.draftsByPlayer?.[otherPlayer?.id] || "";
   const matchFinished = !!matchState?.finishedAt;
   const canPlay = !!socketRef.current && !!roundState && !roundState.finishedAt && !matchFinished;
   const roundTarget = roundState?.target;
@@ -102,11 +137,15 @@ export default function App() {
   const playerLabel =
     playerNames.length > 0 ? `Player: ${playerNames.join(" | ")}` : `Player: ${otherPlayer?.name || "Waiting"}`;
 
-  const boardRows = useMemo(() => {
-    const rows = [...meAttempts];
-    while (rows.length < 6) rows.push(null);
-    return rows;
-  }, [meAttempts]);
+  const boardRows = useMemo(
+    () => buildBoardRows(meAttempts, input, !!roundState?.finishedAt),
+    [input, meAttempts, roundState?.finishedAt]
+  );
+
+  const otherBoardRows = useMemo(
+    () => buildBoardRows(otherAttempts, otherDraft, !!roundState?.finishedAt),
+    [otherAttempts, otherDraft, roundState?.finishedAt]
+  );
 
   const keyboardRows = [
     "QWERTYUIOP".split(""),
@@ -175,13 +214,33 @@ export default function App() {
   }, [matchState?.startedAt, roundState?.roundNumber]);
 
   useEffect(() => {
+    if (!joined || !socketRef.current || !roundState || roundState.finishedAt || matchFinished) return;
+    send("guess_draft", { value: input });
+  }, [input, joined, matchFinished, roundState?.finishedAt, roundState?.roundNumber]);
+
+  useEffect(() => {
     if (!joined) {
       setComposerEmojiOpen(false);
+      setComposerEmojiPickerOpen(false);
       setActiveMessageActionId(null);
       setActiveEmojiMessageId(null);
       setReplyTo(null);
     }
   }, [joined]);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (!chatPaneRef.current?.contains(event.target)) {
+        setComposerEmojiOpen(false);
+        setComposerEmojiPickerOpen(false);
+        setActiveMessageActionId(null);
+        setActiveEmojiMessageId(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
 
   useEffect(() => {
     if (!boardNotice) return undefined;
@@ -199,6 +258,11 @@ export default function App() {
     }, 700);
     return () => window.clearTimeout(timer);
   }, [guessFlashToken]);
+
+  useEffect(() => {
+    if (!replyTo) return;
+    chatInputRef.current?.focus();
+  }, [replyTo]);
 
   function connectToRoom(nextRoomCode, nextName) {
     socketRef.current?.close();
@@ -323,6 +387,7 @@ export default function App() {
     setChat("");
     setReplyTo(null);
     setComposerEmojiOpen(false);
+    setComposerEmojiPickerOpen(false);
     setActiveMessageActionId(null);
     setActiveEmojiMessageId(null);
     setChatError("");
@@ -430,10 +495,15 @@ export default function App() {
     setActiveMessageActionId(null);
     setActiveEmojiMessageId(null);
     setComposerEmojiOpen((current) => !current);
+    setComposerEmojiPickerOpen(false);
   }
 
   function pickComposerEmoji(emoji) {
     appendEmoji(emoji);
+  }
+
+  function pickFullComposerEmoji(emojiData) {
+    appendEmoji(emojiData.emoji);
   }
 
   function playAgain() {
@@ -442,6 +512,19 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="romance-bg" aria-hidden="true">
+        <div className="romance-glow romance-glow-left" />
+        <div className="romance-glow romance-glow-right" />
+        <img className="romance-flower romance-flower-tulips drift-slow" src={tulips} alt="" />
+        <img className="romance-flower romance-flower-sakura drift-mid" src={sakura} alt="" />
+        <img className="romance-flower romance-flower-branch drift-slow" src={cherryBlossom} alt="" />
+        <img className="romance-flower romance-flower-tulip drift-fast" src={tulipSingle} alt="" />
+        <img className="romance-flower romance-flower-petal-a drift-fast" src={sakura} alt="" />
+        <img className="romance-flower romance-flower-petal-b drift-mid" src={tulipSingle} alt="" />
+        <img className="romance-flower romance-flower-petal-c drift-slow" src={cherryBlossom} alt="" />
+        <img className="romance-flower romance-flower-petal-d drift-fast" src={tulipSingle} alt="" />
+        <img className="romance-flower romance-flower-petal-e drift-mid" src={sakura} alt="" />
+      </div>
       <main className={`workspace ${joined ? "is-live" : "is-landing"}`}>
         {!joined ? (
           <section className="landing-pane">
@@ -527,14 +610,41 @@ export default function App() {
                   ) : null}
                 </div>
 
+                {otherPlayer ? (
+                  <div className="opponent-panel">
+                    <div className="opponent-panel-head">
+                      <span>{otherPlayer.name}</span>
+                      <span>{otherDraft ? "Typing..." : "Waiting"}</span>
+                    </div>
+                    <div className="opponent-grid">
+                      {otherBoardRows.map((row, rowIndex) => (
+                        <div key={`opponent-${rowIndex}`} className="opponent-row">
+                          {Array.from({ length: 5 }).map((_, colIndex) => {
+                            const letter = row?.guess?.[colIndex] || "";
+                            const status = row?.result?.[colIndex];
+                            return (
+                              <div
+                                key={colIndex}
+                                className={`cell opponent-cell ${status || ""} ${row?.isDraft ? "is-draft" : ""}`}
+                              >
+                                {letter}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {
-                    const isActiveRow = !row && rowIndex === meAttempts.length && !roundState?.finishedAt;
+                    const isActiveRow = row?.isDraft && rowIndex === meAttempts.length && !roundState?.finishedAt;
                     const isFlashRow = isActiveRow && !!guessFlashToken;
                     return (
                       <div key={rowIndex} className={`row ${isFlashRow ? "is-flash" : ""}`}>
                         {Array.from({ length: 5 }).map((_, colIndex) => {
-                          const letter = row?.guess?.[colIndex] || (isActiveRow ? input[colIndex] || "" : "");
+                          const letter = row?.guess?.[colIndex] || "";
                           const status = row?.result?.[colIndex];
                           return (
                             <div
@@ -611,24 +721,34 @@ export default function App() {
               </div>
             </section>
 
-            <aside className="chat-pane">
-                <div className="chat-shell">
+            <aside className="chat-pane" ref={chatPaneRef}>
+              <div className="chat-shell">
+                <div className="chat-header">
+                  <div>
+                    <div className="chat-title">Room Chat</div>
+                    <div className="chat-meta">
+                      {roomLabel} · {playerNames.length || 1} player
+                      {playerNames.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <div className={`chat-status ${status === "Connected" ? "is-live" : ""}`}>{status}</div>
+                </div>
                 <div className="messages">
-                  {(state?.messages || []).map((message) => (
+                  {(state?.messages || []).map((message) => {
+                    const emojiOnlyMessage = isEmojiOnlyMessage(message.text);
+
+                    return (
                     <div
                       key={message.id}
                       className={`message ${activeEmojiMessageId === message.id ? "is-active" : ""} ${
                         Object.keys(message.reactions || {}).length > 0 ? "has-reactions" : ""
-                      }`}
+                      } ${emojiOnlyMessage ? "is-emoji-only" : ""}`}
+                      onMouseEnter={() => setActiveMessageActionId(message.id)}
+                      onMouseLeave={() => {
+                        setActiveMessageActionId((current) => (current === message.id ? null : current));
+                      }}
                     >
-                      <div
-                        className={`message-stack ${message.playerId === you.playerId ? "mine" : ""}`}
-                        onMouseEnter={() => setActiveMessageActionId(message.id)}
-                        onMouseLeave={() => {
-                          setActiveMessageActionId((current) => (current === message.id ? null : current));
-                          setActiveEmojiMessageId((current) => (current === message.id ? null : current));
-                        }}
-                      >
+                      <div className={`message-stack ${message.playerId === you.playerId ? "mine" : ""}`}>
                         {message.replyTo ? (
                           <button
                             type="button"
@@ -641,15 +761,10 @@ export default function App() {
                               })
                             }
                           >
-                            <span className="reply-author">{message.replyTo.name}</span>
                             <span>{replyPreviewText(message.replyTo.text, 54)}</span>
                           </button>
                         ) : null}
-                        <div className="bubble">
-                            {isEmojiOnlyMessage(message.text) ? (
-                              <span className="emoji-message">{message.text}</span>
-                            ) : null}
-                            {!isEmojiOnlyMessage(message.text) ? <p>{message.text}</p> : null}
+                        <div className={`message-row ${message.playerId === you.playerId ? "mine" : "other"}`}>
                           <div
                             className={`bubble-actions ${
                               activeMessageActionId === message.id ? "is-open" : ""
@@ -676,23 +791,31 @@ export default function App() {
                               ↩
                             </button>
                           </div>
-                          {activeEmojiMessageId === message.id ? (
-                            <div className="floating-reactions">
-                              {["❤️", "🫠", "🤔", "😢", "😘", "😂"].map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  className={`reaction-chip ${
-                                    message.reactions?.[you.playerId] === emoji ? "is-selected" : ""
-                                  }`}
-                                  onClick={() => reactToMessage(message.id, emoji)}
-                                  aria-label={`React with ${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
+                          <div className="bubble">
+                            {emojiOnlyMessage ? (
+                              <span className="emoji-message">{message.text}</span>
+                            ) : null}
+                            {!emojiOnlyMessage ? <p>{message.text}</p> : null}
+                            {activeEmojiMessageId === message.id ? (
+                              <div
+                                className={`floating-reactions ${message.playerId === you.playerId ? "mine" : "other"}`}
+                              >
+                                {["❤️", "🫠", "🤔", "😢", "😘", "😂"].map((emoji) => (
+                                  <button
+                                    key={emoji}
+                                    type="button"
+                                    className={`reaction-chip ${
+                                      message.reactions?.[you.playerId] === emoji ? "is-selected" : ""
+                                    }`}
+                                    onClick={() => reactToMessage(message.id, emoji)}
+                                    aria-label={`React with ${emoji}`}
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                         {Object.entries(message.reactions || {}).length > 0 ? (
                           <div className="reaction-bubble-row">
@@ -713,7 +836,7 @@ export default function App() {
                         ) : null}
                       </div>
                     </div>
-                  ))}
+                  )})}
                   <div ref={messagesEndRef} />
                 </div>
                 <form className="chat-form" onSubmit={onSubmitChat}>
@@ -746,25 +869,48 @@ export default function App() {
                         </button>
                         {composerEmojiOpen ? (
                           <div className="composer-emoji-panel">
-                            <div className="composer-emoji-row">
+                            <div className="emoji-panel-label">Quick reactions</div>
+                            <div className="composer-emoji-grid">
                               {["❤️", "🫠", "🤔", "😢", "😘", "😂"].map((emoji) => (
-                                  <button
-                                    key={`composer-${emoji}`}
-                                    type="button"
-                                    className="composer-emoji-chip"
-                                    onClick={() => pickComposerEmoji(emoji)}
-                                  >
-                                    {emoji}
-                                  </button>
-                                ))}
-                              <button type="button" className="composer-emoji-chip more" onClick={() => appendEmoji("✨")}>
+                                <button
+                                  key={`composer-${emoji}`}
+                                  type="button"
+                                  className="composer-emoji-chip"
+                                  onClick={() => pickComposerEmoji(emoji)}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                className="composer-emoji-chip more"
+                                onClick={() => setComposerEmojiPickerOpen((current) => !current)}
+                              >
                                 +
                               </button>
                             </div>
+                            {composerEmojiPickerOpen ? (
+                              <div className="full-emoji-picker composer">
+                                <EmojiPicker
+                                  onEmojiClick={pickFullComposerEmoji}
+                                  theme={Theme.DARK}
+                                  width="100%"
+                                  height={320}
+                                  className="compact-emoji-picker"
+                                  previewConfig={{ showPreview: false }}
+                                  searchPlaceholder="Search emoji"
+                                  categories={EMOJI_CATEGORIES}
+                                  suggestedEmojisMode="recent"
+                                  skinTonesDisabled
+                                  lazyLoadEmojis
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
                       <input
+                        ref={chatInputRef}
                         value={chat}
                         onChange={(e) => setChat(e.target.value)}
                         placeholder="Write a message"
