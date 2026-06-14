@@ -110,100 +110,126 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-kicker">Online Wordle</div>
-          <h1>DM-style co-op duel</h1>
-        </div>
-        <div className="card">
-          <label>Room</label>
-          <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} />
-          <button onClick={applyRoom}>Reconnect</button>
-        </div>
-        <div className="card">
-          <label>Your name</label>
-          <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
-          <button onClick={applyName}>Update name</button>
-        </div>
-        <div className="card meta">
-          <div><span>Status</span><strong>{status}</strong></div>
-          <div><span>Room</span><strong>{roomId}</strong></div>
-          <div><span>Opponent</span><strong>{otherPlayer?.name || "Waiting"}</strong></div>
-        </div>
-      </aside>
-
-      <main className="main">
-        <section className="board card">
-          <div className="board-header">
-            <div>
-              <h2>Guess the 5-letter word</h2>
-              <p>Each player gets 6 guesses.</p>
-            </div>
-            {roomState?.finishedAt ? (
-              <button onClick={() => send("next_round", {})}>New Round</button>
-            ) : null}
+      <header className="topbar">
+        <div className="topbar-left">
+          <button className="icon-button" aria-label="menu">☰</button>
+          <div className="brand">
+            <div className="brand-kicker">Online Wordle</div>
+            <div className="brand-title">Room duel</div>
           </div>
+        </div>
+        <div className="topbar-actions">
+          <div className="pill">{status}</div>
+          <div className="pill">Room {roomId}</div>
+          <div className="pill">{otherPlayer?.name || "Waiting"}</div>
+        </div>
+      </header>
 
-          <div className="grid">
-            {boardRows.map((row, rowIndex) => (
-              <div key={rowIndex} className="row">
-                {Array.from({ length: 5 }).map((_, colIndex) => {
-                  const letter = row?.guess?.[colIndex] || "";
-                  const status = row?.result?.[colIndex];
-                  return (
-                    <div key={colIndex} className={cellClass(status)}>
-                      {letter}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          <form className="guess-form" onSubmit={onSubmitGuess}>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value.slice(0, 5))}
-              placeholder="enter 5 letters"
-              maxLength={5}
-              disabled={!canPlay}
-            />
-            <button disabled={!canPlay}>Guess</button>
-          </form>
-          <div className="hint">
-            {roomState?.finishedAt
-              ? roomState?.winner === you.playerId
-                ? "You won this round."
-                : "Round ended."
-              : "Green = correct, yellow = present, gray = absent."}
-          </div>
-        </section>
-
-        <section className="chat card">
-          <div className="chat-header">
-            <h2>Chat</h2>
-            <span>Room only</span>
-          </div>
-          <div className="messages">
-            {(state?.messages || []).map((message) => (
-              <div key={message.id} className={`message ${message.playerId === you.playerId ? "mine" : ""}`}>
-                <div className="bubble">
-                  <div className="sender">{message.name}</div>
-                  <div>{message.text}</div>
+      <main className="workspace">
+        <section className="board-pane">
+          <div className="board-shell">
+            <div className="grid">
+              {boardRows.map((row, rowIndex) => (
+                <div key={rowIndex} className="row">
+                  {Array.from({ length: 5 }).map((_, colIndex) => {
+                    const letter = row?.guess?.[colIndex] || "";
+                    const status = row?.result?.[colIndex];
+                    return (
+                      <div key={colIndex} className={cellClass(status)}>
+                        {letter}
+                      </div>
+                    );
+                  })}
                 </div>
+              ))}
+            </div>
+
+            <form className="guess-form" onSubmit={onSubmitGuess}>
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value.slice(0, 5))}
+                placeholder="guess 5 letters"
+                maxLength={5}
+                disabled={!canPlay}
+              />
+              <button disabled={!canPlay}>Enter</button>
+            </form>
+
+            <div className="keyboard">
+              {[
+                "QWERTYUIOP",
+                "ASDFGHJKL",
+                "ZXCVBNM"
+              ].map((row, rowIndex) => (
+                <div key={rowIndex} className="keyboard-row">
+                  {row.split("").map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="key"
+                      onClick={() => setInput((value) => (value.length < 5 ? `${value}${key.toLowerCase()}` : value))}
+                      disabled={!canPlay}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                  {rowIndex === 2 ? (
+                    <button type="button" className="key wide" onClick={() => setInput((value) => value.slice(0, -1))}>
+                      ⌫
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <div className="footer-row">
+              <div className="hint">
+                {roomState?.finishedAt
+                  ? roomState?.winner === you.playerId
+                    ? "You won this round."
+                    : "Round ended."
+                  : "Green = correct, yellow = present, gray = absent."}
               </div>
-            ))}
+              <div className="inline-controls">
+                <input value={roomDraft} onChange={(e) => setRoomDraft(e.target.value)} aria-label="Room code" />
+                <button onClick={applyRoom}>Join</button>
+                <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} aria-label="Your name" />
+                <button onClick={applyName}>Set name</button>
+                {roomState?.finishedAt ? <button onClick={() => send("next_round", {})}>New round</button> : null}
+              </div>
+            </div>
           </div>
-          <form className="chat-form" onSubmit={onSubmitChat}>
-            <input
-              value={chat}
-              onChange={(e) => setChat(e.target.value)}
-              placeholder="Message..."
-              maxLength={240}
-            />
-            <button>Send</button>
-          </form>
         </section>
+
+        <aside className="chat-pane">
+          <div className="chat-shell">
+            <div className="chat-header">
+              <div>
+                <div className="chat-title">Chat</div>
+                <div className="chat-subtitle">Room only</div>
+              </div>
+            </div>
+            <div className="messages">
+              {(state?.messages || []).map((message) => (
+                <div key={message.id} className={`message ${message.playerId === you.playerId ? "mine" : ""}`}>
+                  <div className="bubble">
+                    <div className="sender">{message.name}</div>
+                    <div>{message.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <form className="chat-form" onSubmit={onSubmitChat}>
+              <input
+                value={chat}
+                onChange={(e) => setChat(e.target.value)}
+                placeholder="Message..."
+                maxLength={240}
+              />
+              <button>Send</button>
+            </form>
+          </div>
+        </aside>
       </main>
     </div>
   );
