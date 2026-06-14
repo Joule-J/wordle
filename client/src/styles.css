@@ -270,16 +270,8 @@ input:focus {
 }
 
 .landing-card::before {
-  content: "W O R D L E";
-  position: absolute;
-  left: 34px;
-  bottom: 26px;
-  color: rgba(246, 243, 234, 0.045);
-  font-size: clamp(3.8rem, 10vw, 7.8rem);
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  pointer-events: none;
-  white-space: nowrap;
+  /* Decorative background title removed per user request */
+  content: none;
 }
 
 .landing-copy,
