@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker, { Categories, Theme } from "emoji-picker-react";
+import balloonHearts from "./assets/balloon-hearts.png";
 import cherryBlossom from "./assets/flowers/cherry-blossom.png";
 import sakura from "./assets/flowers/sakura.png";
 import tulips from "./assets/flowers/tulips.png";
@@ -32,7 +33,7 @@ function getId() {
 }
 
 function getName() {
-  return localStorage.getItem("wordle_player_name") || "Player";
+  return "";
 }
 
 function setStoredName(name) {
@@ -530,9 +531,11 @@ export default function App() {
           <section className="landing-pane">
             <div className="landing-card">
               <div className="landing-copy">
-                <div className="brand-kicker">ONLINE WORDLE</div>
-                <h2>Oda oluştur veya katıl</h2>
-                <p>İsim zorunlu. Oda oluşturan kod alır, katılan mevcut kodla girer.</p>
+                <div className="site-brand">
+                  <img className="site-brand-logo" src={balloonHearts} alt="Wordle hearts logo" />
+                </div>
+                <h2>Welcome MyWord</h2>
+                <p>Catch Me If You Can ✨</p>
               </div>
               <form className="landing-form" onSubmit={handleJoinRoom}>
                 <label>İsim</label>
@@ -724,11 +727,14 @@ export default function App() {
             <aside className="chat-pane" ref={chatPaneRef}>
               <div className="chat-shell">
                 <div className="chat-header">
-                  <div>
-                    <div className="chat-title">Room Chat</div>
-                    <div className="chat-meta">
-                      {roomLabel} · {playerNames.length || 1} player
-                      {playerNames.length === 1 ? "" : "s"}
+                  <div className="chat-brand">
+                    <img className="chat-brand-logo" src={balloonHearts} alt="Wordle hearts logo" />
+                    <div>
+                      <div className="chat-title">Chat Box</div>
+                      <div className="chat-meta">
+                        {roomLabel} · {playerNames.length || 1} player
+                        {playerNames.length === 1 ? "" : "s"}
+                      </div>
                     </div>
                   </div>
                   <div className={`chat-status ${status === "Connected" ? "is-live" : ""}`}>{status}</div>
@@ -909,14 +915,16 @@ export default function App() {
                           </div>
                         ) : null}
                       </div>
-                      <input
-                        ref={chatInputRef}
-                        value={chat}
-                        onChange={(e) => setChat(e.target.value)}
-                        placeholder="Write a message"
-                        maxLength={240}
-                      />
-                      <button type="submit">Send</button>
+                        <input
+                          ref={chatInputRef}
+                          value={chat}
+                          onChange={(e) => setChat(e.target.value)}
+                          placeholder="Write a message"
+                          maxLength={240}
+                        />
+                      <button type="submit" className="chat-send-button" aria-label="Send message">
+                        →
+                      </button>
                     </div>
                   </div>
                 </form>
