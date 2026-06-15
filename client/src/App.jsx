@@ -163,7 +163,7 @@ export default function App() {
   const [activeMessageActionId, setActiveMessageActionId] = useState(null);
   const [activeEmojiMessageId, setActiveEmojiMessageId] = useState(null);
   const socketRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  const messagesRef = useRef(null);
   const chatPaneRef = useRef(null);
   const chatInputRef = useRef(null);
 
@@ -245,8 +245,17 @@ export default function App() {
   }, [canPlay, input, joined]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [state?.messages?.length]);
+    const messagesEl = messagesRef.current;
+    if (!messagesEl) return undefined;
+
+    const scrollToBottom = () => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    };
+
+    scrollToBottom();
+    const frameId = window.requestAnimationFrame(scrollToBottom);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [joined, state?.messages?.length]);
 
   useEffect(() => {
     setInput("");
@@ -756,7 +765,7 @@ export default function App() {
                   </div>
                   <div className={`chat-status ${status === "Connected" ? "is-live" : ""}`}>{status}</div>
                 </div>
-                <div className="messages">
+                <div className="messages" ref={messagesRef}>
                   {(state?.messages || []).map((message) => {
                     const emojiOnlyMessage = isEmojiOnlyMessage(message.text);
 
@@ -860,7 +869,6 @@ export default function App() {
                       </div>
                     </div>
                   )})}
-                  <div ref={messagesEndRef} />
                 </div>
                 <form className="chat-form" onSubmit={onSubmitChat}>
                   <div className="chat-controls">
