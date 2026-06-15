@@ -169,10 +169,8 @@ export default function App() {
 
   const roundState = state?.round;
   const matchState = state?.match;
-  const meAttempts = roundState?.attemptsByPlayer?.[you.playerId] || [];
   const otherPlayer = state?.players?.find((p) => p.id !== you.playerId);
-  const otherAttempts = roundState?.attemptsByPlayer?.[otherPlayer?.id] || [];
-  const otherDraft = roundState?.draftsByPlayer?.[otherPlayer?.id] || "";
+  const sharedAttempts = roundState?.attempts || roundState?.attemptsByPlayer?.[you.playerId] || [];
   const matchFinished = !!matchState?.finishedAt;
   const canPlay = !!socketRef.current && !!roundState && !roundState.finishedAt && !matchFinished;
   const roundTarget = roundState?.target;
@@ -183,13 +181,8 @@ export default function App() {
     playerNames.length > 0 ? `Player: ${playerNames.join(" | ")}` : `Player: ${otherPlayer?.name || "Waiting"}`;
 
   const boardRows = useMemo(
-    () => buildBoardRows(meAttempts, input, !!roundState?.finishedAt),
-    [input, meAttempts, roundState?.finishedAt]
-  );
-
-  const otherBoardRows = useMemo(
-    () => buildBoardRows(otherAttempts, otherDraft, !!roundState?.finishedAt),
-    [otherAttempts, otherDraft, roundState?.finishedAt]
+    () => buildBoardRows(sharedAttempts, input, !!roundState?.finishedAt),
+    [input, sharedAttempts, roundState?.finishedAt]
   );
 
   const keyboardRows = [
@@ -201,7 +194,7 @@ export default function App() {
   const keyboardState = useMemo(() => {
     const order = { correct: 3, present: 2, absent: 1 };
     const map = {};
-    for (const attempt of meAttempts) {
+    for (const attempt of sharedAttempts) {
       attempt.result.forEach((result, index) => {
         const letter = attempt.guess[index]?.toUpperCase();
         if (!letter) return;
@@ -211,7 +204,7 @@ export default function App() {
       });
     }
     return map;
-  }, [meAttempts]);
+  }, [sharedAttempts]);
 
   useEffect(() => {
     return () => socketRef.current?.close();
@@ -237,11 +230,13 @@ export default function App() {
         return;
       }
       if (event.key === "Backspace") {
-        setInput((value) => value.slice(0, -1));
+        updateSharedDraft((value) => value.slice(0, -1));
         return;
       }
       if (/^[a-zA-Z]$/.test(event.key)) {
-        setInput((value) => (value.length < 5 ? `${value}${event.key.toLowerCase()}` : value));
+        updateSharedDraft((value) =>
+          value.length < 5 ? `${value}${event.key.toLowerCase()}` : value
+        );
       }
     }
 
@@ -257,11 +252,6 @@ export default function App() {
     setInput("");
     setChatError("");
   }, [matchState?.startedAt, roundState?.roundNumber]);
-
-  useEffect(() => {
-    if (!joined || !socketRef.current || !roundState || roundState.finishedAt || matchFinished) return;
-    send("guess_draft", { value: input });
-  }, [input, joined, matchFinished, roundState?.finishedAt, roundState?.roundNumber]);
 
   useEffect(() => {
     if (!joined) {
@@ -359,6 +349,7 @@ export default function App() {
       if (data.type === "state") {
         settled = true;
         setState(data.state);
+        setInput(data.state?.round?.draft || "");
         if (data.you) setYou(data.you);
         setJoined(true);
         return;
@@ -424,6 +415,16 @@ export default function App() {
     }
   }
 
+  function updateSharedDraft(updater) {
+    if (!canPlay) return;
+    setInput((value) => {
+      const nextValue = typeof updater === "function" ? updater(value) : updater;
+      send("guess_draft", { value: nextValue });
+      return nextValue;
+    });
+    setBoardNotice("");
+  }
+
   function onSubmitChat(e) {
     e.preventDefault();
     const text = chat.trim();
@@ -466,6 +467,7 @@ export default function App() {
       setRoomCode(data.roomId);
       setRoomCodeDraft(data.roomId);
       setState(data);
+      setInput(data.round?.draft || "");
       setJoined(true);
       connectToRoom(data.roomId, trimmedName);
     } catch (error) {
@@ -504,6 +506,7 @@ export default function App() {
       setRoomCode(normalizedRoomCode);
       setRoomCodeDraft(normalizedRoomCode);
       setState(data);
+      setInput(data.round?.draft || "");
       setJoined(true);
       connectToRoom(normalizedRoomCode, trimmedName);
     } catch (error) {
@@ -514,8 +517,7 @@ export default function App() {
   }
 
   function handleGuessInput(char) {
-    setInput((value) => (value.length < 5 ? `${value}${char}` : value));
-    setBoardNotice("");
+    updateSharedDraft((value) => (value.length < 5 ? `${value}${char}` : value));
   }
 
   function reactToMessage(messageId, emoji) {
@@ -657,25 +659,19 @@ export default function App() {
 
                 <div className="grid">
                   {boardRows.map((row, rowIndex) => {
-                    const isActiveRow = row?.isDraft && rowIndex === meAttempts.length && !roundState?.finishedAt;
+                    const isActiveRow = row?.isDraft && rowIndex === sharedAttempts.length && !roundState?.finishedAt;
                     const isFlashRow = isActiveRow && !!guessFlashToken;
                     return (
                       <div key={rowIndex} className={`row ${isFlashRow ? "is-flash" : ""}`}>
                         {Array.from({ length: 5 }).map((_, colIndex) => {
                           const letter = row?.guess?.[colIndex] || "";
                           const status = row?.result?.[colIndex];
-                          const opponentLetter = otherBoardRows?.[rowIndex]?.guess?.[colIndex] || "";
                           return (
                             <div
                               key={colIndex}
                               className={`${cellClass(status)} ${isFlashRow ? "flash-error" : ""}`}
                             >
                               <span className="main-letter">{letter}</span>
-                              {opponentLetter ? (
-                                <span className="opponent-inline" aria-hidden="true">
-                                  {opponentLetter}
-                                </span>
-                              ) : null}
                             </div>
                           );
                         })}
@@ -712,7 +708,7 @@ export default function App() {
                               key={key}
                               type="button"
                               className="key wide icon-key"
-                              onClick={() => setInput((value) => value.slice(0, -1))}
+                              onClick={() => updateSharedDraft((value) => value.slice(0, -1))}
                               disabled={!canPlay}
                               aria-label="Backspace"
                             >

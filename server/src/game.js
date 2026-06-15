@@ -42,6 +42,8 @@ async function createRound(roundNumber) {
     startedAt: Date.now(),
     finishedAt: null,
     winner: null,
+    attempts: [],
+    draft: "",
     attemptsByPlayer: {},
     draftsByPlayer: {},
     revealed: false
@@ -113,6 +115,8 @@ export function roomSnapshot(room) {
       winner: room.round.winner,
       revealed: room.round.revealed,
       target: room.round.revealed ? room.round.target : null,
+      attempts: room.round.attempts,
+      draft: room.round.draft,
       attemptsByPlayer: room.round.attemptsByPlayer,
       draftsByPlayer: room.round.draftsByPlayer
     }
@@ -146,8 +150,8 @@ export async function guess(room, playerId, value) {
     return { ok: false, error: "round_finished" };
   }
   const guessWord = value.toLowerCase();
-  const playerGuesses = room.round.attemptsByPlayer[playerId] ?? [];
-  if (playerGuesses.length >= 6) {
+  const attempts = room.round.attempts ?? [];
+  if (attempts.length >= 6) {
     return { ok: false, error: "attempt_limit" };
   }
 
@@ -157,23 +161,21 @@ export async function guess(room, playerId, value) {
     result,
     at: Date.now()
   };
-  room.round.attemptsByPlayer[playerId] = [...playerGuesses, entry];
-  room.round.draftsByPlayer[playerId] = "";
+  room.round.attempts = [...attempts, entry];
+  room.round.draft = "";
+  for (const player of room.players) {
+    room.round.attemptsByPlayer[player.id] = room.round.attempts;
+    room.round.draftsByPlayer[player.id] = "";
+  }
 
   if (guessWord === room.round.target) {
     const progress = finishRound(room, playerId, true);
     return { ok: true, entry, ...progress, won: true };
   }
 
-  if (playerGuesses.length + 1 >= 6) {
+  if (attempts.length + 1 >= 6) {
     const progress = finishRound(room, playerId, false);
     return { ok: true, entry, ...progress, won: false, limitReached: true };
-  }
-
-  const allAttempts = Object.values(room.round.attemptsByPlayer).flat();
-  if (allAttempts.length >= 12) {
-    const progress = finishRound(room, playerId, false);
-    return { ok: true, entry, ...progress, won: false };
   }
 
   return { ok: true, entry, roundEnded: false, won: false };
@@ -208,7 +210,10 @@ export function setPlayerDraft(room, playerId, value) {
     .replace(/[^a-z]/g, "")
     .slice(0, 5);
 
-  room.round.draftsByPlayer[playerId] = draft;
+  room.round.draft = draft;
+  for (const player of room.players) {
+    room.round.draftsByPlayer[player.id] = draft;
+  }
   return true;
 }
 
