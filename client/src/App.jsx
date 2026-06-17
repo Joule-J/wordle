@@ -33,7 +33,7 @@ function getId() {
 }
 
 function getName() {
-  return "";
+  return localStorage.getItem("wordle_player_name") || "";
 }
 
 function setStoredName(name) {
@@ -176,6 +176,22 @@ export default function App() {
   const roundTarget = roundState?.target;
   const roomLabel = state?.roomId || roomCode || "—";
   const roundLabel = matchState ? `${matchState.currentRoundNumber}/${matchState.totalRounds}` : "—";
+  const matchResults = matchState?.results || [];
+  const playAgainReady = matchState?.playAgainReady || {};
+  const readyPlayerCount = Object.keys(playAgainReady).length;
+  const totalPlayerCount = state?.players?.length || 1;
+  const isPlayAgainReady = !!playAgainReady?.[you.playerId];
+  const resultRows = useMemo(() => {
+    const totalRounds = matchState?.totalRounds || 5;
+    return Array.from({ length: totalRounds }, (_, index) => {
+      return matchResults.find((result) => result.roundNumber === index + 1) || {
+        roundNumber: index + 1,
+        target: "",
+        solved: false,
+        attemptsUsed: 0
+      };
+    });
+  }, [matchResults, matchState?.totalRounds]);
   const playerNames = (state?.players || []).map((player) => player.name).filter(Boolean);
   const playerLabel =
     playerNames.length > 0 ? `Player: ${playerNames.join(" | ")}` : `Player: ${otherPlayer?.name || "Waiting"}`;
@@ -449,11 +465,7 @@ export default function App() {
   }
 
   async function handleCreateRoom() {
-    const trimmedName = nameDraft.trim().slice(0, 24);
-    if (!trimmedName) {
-      setRoomError("Name is required.");
-      return;
-    }
+    const trimmedName = nameDraft.trim().slice(0, 24) || "Player";
 
     setRoomError("");
     setStatus("Creating room...");
@@ -492,12 +504,8 @@ export default function App() {
 
   async function handleJoinRoom(e) {
     e.preventDefault();
-    const trimmedName = nameDraft.trim().slice(0, 24);
+    const trimmedName = nameDraft.trim().slice(0, 24) || "Player";
     const normalizedRoomCode = normalizeRoomCode(roomCodeDraft);
-    if (!trimmedName) {
-      setRoomError("Name is required.");
-      return;
-    }
     if (!normalizedRoomCode) {
       setRoomError("Room code is required.");
       return;
@@ -577,6 +585,12 @@ export default function App() {
         <img className="romance-flower romance-flower-petal-d drift-fast" src={tulipSingle} alt="" />
         <img className="romance-flower romance-flower-petal-e drift-mid" src={sakura} alt="" />
       </div>
+      {joined ? (
+        <div className={`round-badge ${matchFinished ? "is-finished" : ""}`} aria-live="polite">
+          <span>{matchFinished ? "Seri bitti" : "Round"}</span>
+          <strong>{roundLabel}</strong>
+        </div>
+      ) : null}
       <main className={`workspace ${joined ? "is-live" : "is-landing"}`}>
         {!joined ? (
           <section className="landing-pane">
@@ -631,11 +645,11 @@ export default function App() {
                   <span>{playerLabel}</span>
                 </div>
 
-                {boardNotice || (roundTarget && roundState?.finishedAt) ? (
+                {boardNotice || (!matchFinished && roundTarget && roundState?.finishedAt) ? (
                   <div className="board-overlay" aria-live="polite" aria-atomic="true">
                     <div
                       className={`board-notice ${boardNoticeKind === "error" ? "is-error" : ""} ${
-                        roundTarget && roundState?.finishedAt ? "is-answer" : ""
+                        !matchFinished && roundTarget && roundState?.finishedAt ? "is-answer" : ""
                       }`}
                     >
                       {boardNotice || (
@@ -647,100 +661,147 @@ export default function App() {
                   </div>
                 ) : null}
 
-                <div className="match-line">
-                  <div className="match-copy">
-                    {!state
-                      ? "Bağlanıyor..."
-                      : matchFinished
-                        ? "5 round bitti. Same room code ile Play Again."
-                        : roundState?.finishedAt
-                          ? "Round tamamlandı, sonraki tur hazırlanıyor."
-                          : "Kelimeyi bul."}
-                  </div>
-                  {matchFinished ? (
-                    <button type="button" className="play-again-button" onClick={playAgain}>
-                      Play Again
-                    </button>
-                  ) : null}
-                </div>
-
-                {/* Opponent panel removed — opponent letters are shown inline within the main grid cells */}
-
-                <div className="grid">
-                  {boardRows.map((row, rowIndex) => {
-                    const isActiveRow = row?.isDraft && rowIndex === sharedAttempts.length && !roundState?.finishedAt;
-                    const isFlashRow = isActiveRow && !!guessFlashToken;
-                    return (
-                      <div key={rowIndex} className={`row ${isFlashRow ? "is-flash" : ""}`}>
-                        {Array.from({ length: 5 }).map((_, colIndex) => {
-                          const letter = row?.guess?.[colIndex] || "";
-                          const status = row?.result?.[colIndex];
-                          return (
-                            <div
-                              key={colIndex}
-                              className={`${cellClass(status)} ${isFlashRow ? "flash-error" : ""}`}
-                            >
-                              <span className="main-letter">{letter}</span>
-                            </div>
-                          );
-                        })}
+                {matchFinished ? (
+                  <div className="results-panel" aria-live="polite">
+                    <div className="results-head">
+                      <div>
+                        <div className="results-kicker">5 round tamamlandı</div>
+                        <h2>Sonuç grafiği</h2>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="results-room">Room {roomLabel}</div>
+                    </div>
 
-                <div className="keyboard">
-                  {keyboardRows.map((row, rowIndex) => (
-                    <div key={rowIndex} className="keyboard-row">
-                      {row.map((key) => {
-                        if (key === "ENTER") {
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              className="key wide enter-key"
-                              onClick={() => {
-                                if (input.length === 5) {
-                                  send("guess", { value: input.trim().toLowerCase() });
-                                }
-                              }}
-                              disabled={!canPlay || input.length !== 5}
-                            >
-                              Enter
-                            </button>
-                          );
-                        }
-
-                        if (key === "BACKSPACE") {
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              className="key wide icon-key"
-                              onClick={() => updateSharedDraft((value) => value.slice(0, -1))}
-                              disabled={!canPlay}
-                              aria-label="Backspace"
-                            >
-                              ⌫
-                            </button>
-                          );
-                        }
-
+                    <div className="results-chart">
+                      {resultRows.map((result) => {
+                        const attemptsUsed = Number(result.attemptsUsed || 0);
+                        const barValue = result.solved ? attemptsUsed : 6;
+                        const barWidth = `${Math.max(10, (barValue / 6) * 100)}%`;
                         return (
-                          <button
-                            key={key}
-                            type="button"
-                            className={`key ${keyboardState[key] || ""}`}
-                            onClick={() => handleGuessInput(key.toLowerCase())}
-                            disabled={!canPlay}
-                          >
-                            {key}
-                          </button>
+                          <div key={result.roundNumber} className="result-row">
+                            <div className="result-round">R{result.roundNumber}</div>
+                            <div className="result-bar-track">
+                              <div
+                                className={`result-bar ${result.solved ? "is-solved" : "is-lost"}`}
+                                style={{ width: barWidth }}
+                              >
+                                <span>
+                                  {result.solved
+                                    ? `${attemptsUsed}. deneme`
+                                    : "Bulunamadı"}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="result-word">{result.target ? result.target.toUpperCase() : "-"}</div>
+                          </div>
                         );
                       })}
                     </div>
-                  ))}
-                </div>
+
+                    <div className="play-again-panel">
+                      <button
+                        type="button"
+                        className="play-again-button"
+                        onClick={playAgain}
+                        disabled={isPlayAgainReady}
+                      >
+                        {isPlayAgainReady ? "Hazır bekleniyor" : "Play Again"}
+                      </button>
+                      <div className="play-again-status">
+                        {readyPlayerCount}/{totalPlayerCount} oyuncu hazır. Yeni 5'li seri herkes basınca başlar.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="match-line">
+                      <div className="match-copy">
+                        {!state
+                          ? "Bağlanıyor..."
+                          : roundState?.finishedAt
+                            ? "Round tamamlandı, sonraki tur hazırlanıyor."
+                            : "Kelimeyi bul."}
+                      </div>
+                    </div>
+
+                    {/* Opponent panel removed — opponent letters are shown inline within the main grid cells */}
+
+                    <div className="grid">
+                      {boardRows.map((row, rowIndex) => {
+                        const isActiveRow = row?.isDraft && rowIndex === sharedAttempts.length && !roundState?.finishedAt;
+                        const isFlashRow = isActiveRow && !!guessFlashToken;
+                        return (
+                          <div key={rowIndex} className={`row ${isFlashRow ? "is-flash" : ""}`}>
+                            {Array.from({ length: 5 }).map((_, colIndex) => {
+                              const letter = row?.guess?.[colIndex] || "";
+                              const status = row?.result?.[colIndex];
+                              return (
+                                <div
+                                  key={colIndex}
+                                  className={`${cellClass(status)} ${isFlashRow ? "flash-error" : ""}`}
+                                >
+                                  <span className="main-letter">{letter}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="keyboard">
+                      {keyboardRows.map((row, rowIndex) => (
+                        <div key={rowIndex} className="keyboard-row">
+                          {row.map((key) => {
+                            if (key === "ENTER") {
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  className="key wide enter-key"
+                                  onClick={() => {
+                                    if (input.length === 5) {
+                                      send("guess", { value: input.trim().toLowerCase() });
+                                    }
+                                  }}
+                                  disabled={!canPlay || input.length !== 5}
+                                >
+                                  Enter
+                                </button>
+                              );
+                            }
+
+                            if (key === "BACKSPACE") {
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  className="key wide icon-key"
+                                  onClick={() => updateSharedDraft((value) => value.slice(0, -1))}
+                                  disabled={!canPlay}
+                                  aria-label="Backspace"
+                                >
+                                  ⌫
+                                </button>
+                              );
+                            }
+
+                            return (
+                              <button
+                                key={key}
+                                type="button"
+                                className={`key ${keyboardState[key] || ""}`}
+                                onClick={() => handleGuessInput(key.toLowerCase())}
+                                disabled={!canPlay}
+                              >
+                                {key}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
 
                 {chatError ? <div className="error-banner">{chatError}</div> : null}
 

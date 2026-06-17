@@ -30,7 +30,9 @@ function createMatchState() {
     finishedAt: null,
     roundsCompleted: 0,
     currentRoundNumber: 1,
-    totalRounds: MATCH_ROUNDS
+    totalRounds: MATCH_ROUNDS,
+    results: [],
+    playAgainReady: {}
   };
 }
 
@@ -70,10 +72,24 @@ export async function startNextRound(room) {
 }
 
 function finishRound(room, playerId, didWin) {
+  const attemptsUsed = room.round.attempts?.length ?? 0;
+
   room.round.finishedAt = Date.now();
   room.round.revealed = true;
   room.round.winner = didWin ? playerId : null;
   room.match.roundsCompleted += 1;
+  room.match.playAgainReady = {};
+  room.match.results = [
+    ...(room.match.results ?? []),
+    {
+      roundNumber: room.round.roundNumber,
+      target: room.round.target,
+      solved: didWin,
+      attemptsUsed,
+      winner: didWin ? playerId : null,
+      finishedAt: room.round.finishedAt
+    }
+  ].slice(-MATCH_ROUNDS);
 
   room.lastOutcome = {
     type: didWin ? "won" : "lost",
@@ -105,7 +121,9 @@ export function roomSnapshot(room) {
       finishedAt: room.match.finishedAt,
       roundsCompleted: room.match.roundsCompleted,
       currentRoundNumber: room.match.currentRoundNumber,
-      totalRounds: room.match.totalRounds
+      totalRounds: room.match.totalRounds,
+      results: room.match.results ?? [],
+      playAgainReady: room.match.playAgainReady ?? {}
     },
     round: {
       roundNumber: room.round.roundNumber,
@@ -195,9 +213,27 @@ export async function nextRound(room) {
   return { ok: true };
 }
 
-export async function playAgain(room) {
+export async function playAgain(room, playerId) {
+  if (!room.match.finishedAt) {
+    return { ok: false, error: "match_active" };
+  }
+
+  room.match.playAgainReady = {
+    ...(room.match.playAgainReady ?? {}),
+    [playerId]: Date.now()
+  };
+
+  const requiredPlayerIds = room.players.map((player) => player.id);
+  const allReady =
+    requiredPlayerIds.length > 0 &&
+    requiredPlayerIds.every((requiredPlayerId) => room.match.playAgainReady?.[requiredPlayerId]);
+
+  if (!allReady) {
+    return { ok: true, waiting: true };
+  }
+
   await resetMatch(room);
-  return { ok: true };
+  return { ok: true, restarted: true };
 }
 
 export function setPlayerDraft(room, playerId, value) {

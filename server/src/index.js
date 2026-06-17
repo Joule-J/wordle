@@ -98,12 +98,8 @@ async function createUniqueRoomId() {
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.post("/api/rooms", async (req, res) => {
-  const name = String(req.body?.name ?? "").trim().slice(0, 24);
+  const name = String(req.body?.name ?? "").trim().slice(0, 24) || "Player";
   const playerId = String(req.body?.playerId ?? "").trim() || `p-${Math.random().toString(16).slice(2)}`;
-  if (!name) {
-    res.status(400).json({ error: "name_required" });
-    return;
-  }
 
   const roomId = await createUniqueRoomId();
   const room = await createRoom(roomId, { playerId, name });
@@ -248,10 +244,10 @@ wss.on("connection", async (ws, req) => {
     }
 
     if (data.type === "play_again") {
-      const result = await playAgain(currentRoom);
+      const result = await playAgain(currentRoom, playerId);
       if (result.ok) {
         broadcast(roomId);
-        ws.send(JSON.stringify({ type: "play_again_result", ok: true }));
+        ws.send(JSON.stringify({ type: "play_again_result", ...result }));
       } else {
         ws.send(JSON.stringify({ type: "play_again_result", ...result }));
       }
@@ -263,6 +259,9 @@ wss.on("connection", async (ws, req) => {
     if (!currentRoom) return;
     if (currentRoom.round?.draftsByPlayer) {
       delete currentRoom.round.draftsByPlayer[playerId];
+    }
+    if (currentRoom.match?.playAgainReady) {
+      delete currentRoom.match.playAgainReady[playerId];
     }
     currentRoom.players = currentRoom.players.filter((p) => p.id !== playerId);
     broadcast(roomId);
